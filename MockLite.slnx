@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/MockLite.Core/MockLite.Core.csproj" />
+  <Project Path="src/MockLite.Generators/MockLite.Generators.csproj" />
+  <Project Path="src/MockLite.Sample/MockLite.Sample.csproj" />
+  <Project Path="tests/MockLite.Core.Tests/MockLite.Core.Tests.csproj" />
+  <Project Path="tests/MockLite.Generators.Tests/MockLite.Generators.Tests.csproj" />
+  <Project Path="tests/MockLite.Integration.Tests/MockLite.Integration.Tests.csproj" />
+</Solution>
