@@ -65,4 +65,8 @@ public static class Mock
         // Fallback: DispatchProxy-based proxy for quick use
         return RuntimeProxy.Create<T>();
     }
+
+
+    public static MockBuilder<T> Create<T>() where T : class
+        => new MockBuilder<T>();
 }

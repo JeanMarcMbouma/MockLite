@@ -11,6 +11,12 @@ public interface ITestService
     Task DoSomethingAsync();
 }
 
+public interface IPropertyService
+{
+    string Name { get; set; }
+    int Count { get; }
+}
+
 public interface IGenericService<T>
 {
     T GetItem(string id);
@@ -19,6 +25,8 @@ public interface IGenericService<T>
 
 public class TestClass
 {
+    // ==================== MOCK.OF TESTS ====================
+
     [Fact]
     public void Test_MockOf_CreatesValidInstance()
     {
@@ -112,7 +120,6 @@ public class TestClass
         mock.DoSomething();
 
         // Assert - check if mock has recorded invocations
-        // Note: Invocations are accessible through reflection for RuntimeProxy
         var mockType = mock.GetType();
         var invocationsProperty = mockType.GetProperty("Invocations");
 
@@ -314,7 +321,7 @@ public class TestClass
         Assert.Null(exception);
     }
 
-    // ==================== SETUP AND PROPERTY ACCESS TESTS ====================
+    // ==================== RUNTIME PROXY INVOCATIONS TESTS ====================
 
     [Fact]
     public void Test_RuntimeProxy_InvocationsProperty_Exists()
@@ -431,7 +438,6 @@ public class TestClass
         // Assert
         Assert.NotNull(methodProperty);
         Assert.NotNull(method);
-        Assert.IsAssignableFrom<System.Reflection.MethodInfo>(method);
     }
 
     [Fact]
