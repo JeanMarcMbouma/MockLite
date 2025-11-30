@@ -75,8 +75,8 @@ public sealed class MockBuilder<T> where T : class
     /// </example>
     public MockBuilder<T> Setup<TResult>(Expression<Func<T, TResult>> expression, Func<TResult> behavior)
     {
-        var (method, _) = ExtractMethod(expression);
-        _proxy.Setup(method, behavior);
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, behavior);
         return this;
     }
 
@@ -321,7 +321,13 @@ public sealed class MockBuilder<T> where T : class
     /// </remarks>
     private static (MethodInfo, object?[]) ExtractMethod(LambdaExpression expr)
     {
-        if (expr.Body is MethodCallExpression call)
+        var body = expr.Body;
+        
+        // Handle Convert expressions (e.g., when return type is boxed to object)
+        if (body is UnaryExpression unary && unary.NodeType == ExpressionType.Convert)
+            body = unary.Operand;
+        
+        if (body is MethodCallExpression call)
             return (call.Method, call.Arguments.Select(a => (object?)Expression.Lambda(a).Compile().DynamicInvoke()).ToArray());
         throw new ArgumentException("Expression must be a method call");
     }

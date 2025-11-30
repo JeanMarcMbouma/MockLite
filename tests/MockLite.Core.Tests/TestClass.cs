@@ -586,7 +586,10 @@ public class TestClass
 
         // Act
         var setupMethod = mockType.GetMethod("Setup",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, [
+                typeof(System.Reflection.MethodInfo),
+                typeof(Delegate)
+                ]);
 
         // Assert
         Assert.NotNull(setupMethod);
@@ -601,7 +604,10 @@ public class TestClass
 
         // Act
         var setupMethod = mockType.GetMethod("Setup",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, [
+                typeof(System.Reflection.MethodInfo),
+                typeof(Delegate)
+                ]);
 
         // Assert
         Assert.NotNull(setupMethod);
@@ -617,7 +623,10 @@ public class TestClass
 
         // Act
         var setupMethod = mockType.GetMethod("Setup",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, [
+                typeof(System.Reflection.MethodInfo),
+                typeof(Delegate)
+                ]);
 
         // Assert
         Assert.NotNull(setupMethod);

@@ -35,8 +35,17 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         args ??= [];
         Invocations.Add(new Invocation(targetMethod!, args!));
 
-        if (_behaviors.TryGetValue(SignatureKey(targetMethod!), out var del))
-            return del.DynamicInvoke(args);
+        // Try to find a behavior that matches the exact arguments first
+        var argKey = CreateArgumentKey(targetMethod!, args);
+        if (_behaviors.TryGetValue(argKey, out var del))
+            return del.Method.GetParameters().Length == 0 ? 
+                del.DynamicInvoke() :
+                del.DynamicInvoke(args);
+
+        // Fall back to method signature only (for setups without specific arguments)
+        if (_behaviors.TryGetValue(SignatureKey(targetMethod!), out del))
+            return del.Method.GetParameters().Length == 0 ?
+                del.DynamicInvoke() : del.DynamicInvoke(args);
 
         var ret = targetMethod!.ReturnType;
         if (ret == typeof(void)) return null;
@@ -65,10 +74,26 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     public void Setup(MethodInfo method, Delegate behavior)
         => _behaviors[SignatureKey(method)] = behavior;
 
+    /// <summary>
+    /// Sets up the behavior for a specific method with specific argument values.
+    /// </summary>
+    /// <param name="method">The method to set up behavior for.</param>
+    /// <param name="args">The specific argument values to match.</param>
+    /// <param name="behavior">The delegate that implements the method behavior.</param>
+    public void Setup(MethodInfo method, object?[] args, Delegate behavior)
+        => _behaviors[CreateArgumentKey(method, args)] = behavior;
+
     private static string SignatureKey(MethodInfo mi)
     {
         var pars = string.Join(",", mi.GetParameters().Select(p => p.ParameterType.FullName));
         return $"{mi.Name}({pars})";
+    }
+
+    private static string CreateArgumentKey(MethodInfo mi, object?[] args)
+    {
+        var pars = string.Join(",", mi.GetParameters().Select(p => p.ParameterType.FullName));
+        var argValues = string.Join(",", args.Select(a => a?.ToString() ?? "null"));
+        return $"{mi.Name}({pars})[{argValues}]";
     }
 
     private static object? GetDefault(Type t) => t.IsValueType ? Activator.CreateInstance(t) : null;
