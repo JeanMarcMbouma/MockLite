@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace MockLite.Core.Tests;
+namespace BbQ.MockLite.Tests;
 
 /// <summary>
 /// Unit tests for Mock.Create method that returns MockBuilder instances.

@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace MockLite.Generators;
+namespace BbQ.MockLite.Generators;
 
 [Generator]
 public class InterfaceMockGenerator : ISourceGenerator
@@ -90,7 +90,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine("using System.Linq;");
         sb.AppendLine("using System.Threading.Tasks;");
         sb.AppendLine("using System.Reflection;");
-        sb.AppendLine("using MockLite;");
+        sb.AppendLine("using BbQ.MockLite;");
 
         if (!string.IsNullOrEmpty(ns)) sb.AppendLine($"namespace {ns} {{");
         sb.AppendLine("[GeneratedMock]");

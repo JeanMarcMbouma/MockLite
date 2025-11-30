@@ -1,10 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8.0</TargetFrameworks>
+    <RootNamespace>BbQ.MockLite.Generators</RootNamespace>
     <Authors>MockLite</Authors>
-    <PackageId>MockLite.Generators</PackageId>
+    <PackageId>BbQ.MockLite.Generators</PackageId>
     <Description>Source generator for MockLite interface mocks</Description>
-    <RepositoryUrl>https://github.com/yourorg/MockLite</RepositoryUrl>
+    <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     <PrivateAssets>all</PrivateAssets>

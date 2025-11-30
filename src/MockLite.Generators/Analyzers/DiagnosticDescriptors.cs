@@ -1,7 +1,7 @@
 ﻿// src/MockLite.Generators/Generators/Diagnostics.cs
 using Microsoft.CodeAnalysis;
 
-namespace MockLite.Generators.Analyzers;
+namespace BbQ.MockLite.Generators.Analyzers;
 
 internal static class DiagnosticDescriptors
 {

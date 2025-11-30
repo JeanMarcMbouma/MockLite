@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Provides common verification predicates for mock method calls.

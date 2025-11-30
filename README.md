@@ -1,32 +1,32 @@
-# MockLite
+﻿# BbQ.MockLite
 
-A lightweight, high-performance mocking framework for .NET that combines compile-time code generation with runtime flexibility. MockLite enables you to create optimized mock implementations at build time while providing fallback runtime proxies for dynamic scenarios.
+A lightweight, high-performance mocking framework for .NET that combines compile-time code generation with runtime flexibility. BbQ.MockLite enables you to create optimized mock implementations at build time while providing fallback runtime proxies for dynamic scenarios.
 
 ## Features
 
-- ? **Compile-Time Code Generation** - Automatically generates optimized mock classes using source generators
-- ?? **High Performance** - Generated mocks are as fast as hand-written implementations
-- ?? **Runtime Fallback** - Seamless fallback to DispatchProxy-based runtime mocks for interfaces without generated mocks
-- ? **Async Support** - First-class support for async methods (`Task`, `Task<T>`, `ValueTask`, `ValueTask<T>`)
-- ?? **Invocation Recording** - Automatically records all method invocations with timestamps for verification
-- ?? **Argument Matching** - Pattern matching for mock setup and verification
-- ?? **Verification** - Flexible verification with Times predicates (`Once`, `Never`, `Exactly`, `AtLeast`, `AtMost`)
-- ?? **Easy API** - Simple, intuitive API inspired by popular mocking frameworks
+- ✨ **Compile-Time Code Generation** - Automatically generates optimized mock classes using source generators
+- 🚀 **High Performance** - Generated mocks are as fast as hand-written implementations
+- 🔄 **Runtime Fallback** - Seamless fallback to DispatchProxy-based runtime mocks for interfaces without generated mocks
+- ⚡ **Async Support** - First-class support for async methods (`Task`, `Task<T>`, `ValueTask`, `ValueTask<T>`)
+- 📝 **Invocation Recording** - Automatically records all method invocations with timestamps for verification
+- 🎯 **Argument Matching** - Pattern matching for mock setup and verification
+- 🔍 **Verification** - Flexible verification with Times predicates (`Once`, `Never`, `Exactly`, `AtLeast`, `AtMost`)
+- 🎓 **Easy API** - Simple, intuitive API inspired by popular mocking frameworks
 
 ## Getting Started
 
 ### Installation
 
-Add MockLite to your project:
+Add BbQ.MockLite to your project:
 
 ```bash
-dotnet add package MockLite.Core
+dotnet add package BbQ.MockLite
 ```
 
 ### Basic Usage
 
 ```csharp
-using MockLite;
+using BbQ.MockLite;
 
 // 1. Define your interface
 [GenerateMock]
@@ -52,10 +52,10 @@ var user = userRepo.GetUser("123");
 
 ## Advanced Setup and Verification with Fluent API
 
-MockLite provides a fluent builder API through `Mock.Create<T>()` for advanced mock configuration:
+BbQ.MockLite provides a fluent builder API through `Mock.Create<T>()` for advanced mock configuration:
 
 ```csharp
-using MockLite;
+using BbQ.MockLite;
 
 // Create a builder instance
 var builder = Mock.Create<IUserRepository>();
@@ -114,7 +114,7 @@ foreach (var invocation in builder.Invocations)
 
 ## Two-Tier Mocking Strategy
 
-MockLite uses an intelligent two-tier approach:
+BbQ.MockLite uses an intelligent two-tier approach:
 
 ### Tier 1: Compile-Time Generated Mocks (Recommended)
 
@@ -128,7 +128,7 @@ public interface IPaymentGateway
     Task<bool> ProcessPaymentAsync(decimal amount);
 }
 
-// The MockLite generator creates: MockPaymentGateway class
+// The BbQ.MockLite generator creates: MockPaymentGateway class
 var mock = Mock.Of<IPaymentGateway>();
 ```
 
@@ -140,7 +140,7 @@ var mock = Mock.Of<IPaymentGateway>();
 
 ### Tier 2: Runtime Proxies (Fallback)
 
-For interfaces without `[GenerateMock]`, MockLite automatically falls back to runtime proxies:
+For interfaces without `[GenerateMock]`, BbQ.MockLite automatically falls back to runtime proxies:
 
 ```csharp
 // No [GenerateMock] attribute - uses DispatchProxy at runtime
@@ -193,7 +193,7 @@ Times.AtMost(5)   // At most 5 calls
 
 ### Async Support
 
-MockLite fully supports async methods:
+BbQ.MockLite fully supports async methods:
 
 ```csharp
 public interface IAsyncRepository
@@ -208,29 +208,29 @@ var mock = Mock.Of<IAsyncRepository>();
 
 ## Project Structure
 
-- **MockLite.Core** - Core runtime helpers (DispatchProxy, invocation recording)
-- **MockLite.Generators** - Source generator for compile-time mock generation
-- **MockLite.Sample** - Comprehensive examples and usage patterns
-- **MockLite.Core.Tests** - Unit tests for core functionality
-- **MockLite.Generators.Tests** - Unit tests for source generators
+- **BbQ.MockLite** - Core runtime helpers (DispatchProxy, invocation recording)
+- **BbQ.MockLite.Generators** - Source generator for compile-time mock generation
+- **BbQ.MockLite.Sample** - Comprehensive examples and usage patterns
+- **BbQ.MockLite.Tests** - Unit tests for core functionality
+- **BbQ.MockLite.Generators.Tests** - Unit tests for source generators
 
 ## Architecture
 
 ```
-MockLite Framework
-??? Source Generators (Compile-time)
-?   ??? Generates optimized MockXxx classes from [GenerateMock] interfaces
-?
-??? Core Runtime (Execution-time)
-?   ??? RuntimeProxy<T> - DispatchProxy-based fallback implementation
-?   ??? Invocation - Records method calls with timestamps
-?   ??? MockBuilder<T> - Fluent API for advanced mock creation
-?   ??? Mock - Factory for creating mock instances
-?
-??? Supporting Infrastructure
-    ??? GenerateMockAttribute - Marks interfaces for code generation
-    ??? It - Argument matchers for flexible matching
-    ??? Times - Verification count predicates
+BbQ.MockLite Framework
+├── Source Generators (Compile-time)
+│   └── Generates optimized MockXxx classes from [GenerateMock] interfaces
+│
+├── Core Runtime (Execution-time)
+│   ├── RuntimeProxy<T> - DispatchProxy-based fallback implementation
+│   ├── Invocation - Records method calls with timestamps
+│   ├── MockBuilder<T> - Fluent API for advanced mock creation
+│   └── Mock - Factory for creating mock instances
+│
+└── Supporting Infrastructure
+    ├── GenerateMockAttribute - Marks interfaces for code generation
+    ├── It - Argument matchers for flexible matching
+    └── Times - Verification count predicates
 ```
 
 ## Best Practices
@@ -243,7 +243,7 @@ MockLite Framework
 
 ## Examples
 
-See the [MockLite.Sample](./src/MockLite.Sample/Program.cs) project for comprehensive examples covering:
+See the [BbQ.MockLite.Sample](./src/MockLite.Sample/Program.cs) project for comprehensive examples covering:
 
 - Basic mock creation and setup
 - Argument matchers

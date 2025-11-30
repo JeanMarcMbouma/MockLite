@@ -9,7 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MockLite.Generators.CodeFixes;
+namespace BbQ.MockLite.Generators.CodeFixes;
 
 internal sealed class VerifyNonMockedFixAllProvider : FixAllProvider
 {

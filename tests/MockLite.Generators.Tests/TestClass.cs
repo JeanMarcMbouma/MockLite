@@ -1,6 +1,6 @@
-﻿using MockLite;
+﻿using BbQ.MockLite;
 
-namespace MockLite.Generators.Tests;
+namespace BbQ.MockLite.Generators.Tests;
 
 [GenerateMock<IUserService>]
 public partial class Mocks { }

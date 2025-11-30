@@ -1,9 +1,9 @@
-﻿using MockLite;
+﻿using BbQ.MockLite;
 
 // MockLite Sample - Demonstrating Mock Creation and Verification
 // This sample shows how to use MockLite for creating and testing mocks of interfaces.
 
-namespace MockLite.Samples;
+namespace BbQ.MockLite.Samples;
 
 // ============================================================================
 // Sample 1: Basic Mock Creation and Setup

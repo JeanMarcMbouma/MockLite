@@ -1,14 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8.0</TargetFrameworks>
-    <RootNamespace>MockLite</RootNamespace>
+    <RootNamespace>BbQ.MockLite</RootNamespace>
     <Authors>MockLite</Authors>
-    <PackageId>MockLite.Core</PackageId>
-    <Description>Lightweight runtime helpers for MockLite</Description>
-    <RepositoryUrl>https://github.com/yourorg/MockLite</RepositoryUrl>
+    <PackageId>BbQ.MockLite</PackageId>
+    <Description>A lightweight, high-performance mocking framework for .NET that combines compile-time code generation with runtime flexibility. MockLite enables you to create optimized mock implementations at build time while providing fallback runtime proxies for dynamic scenarios.</Description>
+    <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <DebugType>portable</DebugType>

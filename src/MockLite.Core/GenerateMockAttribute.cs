@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Marks an interface for mock code generation.

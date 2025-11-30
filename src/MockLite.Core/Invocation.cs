@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Reflection;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Represents a recorded method invocation on a mock object.

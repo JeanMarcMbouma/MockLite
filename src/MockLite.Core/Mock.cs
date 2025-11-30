@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Factory for creating mock instances of interfaces.

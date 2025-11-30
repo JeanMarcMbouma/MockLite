@@ -1,6 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 
-namespace MockLite.Core.Tests;
+namespace BbQ.MockLite.Tests;
 
 public interface ITestService
 {

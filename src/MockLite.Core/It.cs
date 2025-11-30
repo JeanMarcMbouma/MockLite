@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Provides argument matchers for flexible mock setup and verification.

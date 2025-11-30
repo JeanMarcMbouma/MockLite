@@ -4,7 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Fluent builder for configuring and verifying mock instances.

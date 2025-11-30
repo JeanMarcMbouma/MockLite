@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Reflection;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Runtime-based mock proxy using DispatchProxy for interfaces without generated mocks.

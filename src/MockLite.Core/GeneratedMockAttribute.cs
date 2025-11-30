@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace MockLite;
+namespace BbQ.MockLite;
 
 /// <summary>
 /// Marks a class as an automatically generated mock implementation.

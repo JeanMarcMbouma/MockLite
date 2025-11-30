@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace MockLite.Generators.Analyzers;
+namespace BbQ.MockLite.Generators.Analyzers;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class MockLiteAnalyzer : DiagnosticAnalyzer

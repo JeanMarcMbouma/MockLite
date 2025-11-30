@@ -8,7 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MockLite.Generators.CodeFixes;
+namespace BbQ.MockLite.Generators.CodeFixes;
 
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(UnusedSetupCodeFixProvider))]
 [Shared]

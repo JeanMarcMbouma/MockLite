@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <RootNamespace>BbQ.MockLite.Generators.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
