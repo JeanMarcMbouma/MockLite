@@ -122,7 +122,7 @@ public sealed class MockBuilder<T> where T : class
     /// <code>
     /// builder.Verify(
     ///     x => x.GetUser("123"),
-    ///     args => args[0] is string id && id == "123",
+    ///     args => args[0] is string id &amp;&amp; id == "123",
     ///     times => times == 1
     /// );
     /// </code>

@@ -2,11 +2,17 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0</TargetFrameworks>
     <RootNamespace>BbQ.MockLite.Generators</RootNamespace>
-    <Authors>MockLite</Authors>
+    <Authors>Jean Marc Mbouma</Authors>
     <PackageId>BbQ.MockLite.Generators</PackageId>
-    <Description>Source generator for MockLite interface mocks</Description>
+    <Title>BbQ.MockLite.Generators</Title>
+    <Description>Source generator and analyzers for BbQ.MockLite - generates optimized mock implementations at compile time with diagnostic analyzers and code fix providers.</Description>
+    <PackageVersion>1.0.0</PackageVersion>
     <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/JeanMarcMbouma/MockLite</PackageProjectUrl>
+    <PackageTags>mocking;testing;source-generators;analyzers;code-fix;mock</PackageTags>
     <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     <PrivateAssets>all</PrivateAssets>
     <OutputItemType>Analyzer</OutputItemType>
@@ -24,11 +30,14 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.10.0" PrivateAssets="all" />
-
   </ItemGroup>
   <!-- Ensure analyzer is included in the correct NuGet package structure -->
   <ItemGroup>
     <None Include="$(OutputPath)MockLite.SourceGenerators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

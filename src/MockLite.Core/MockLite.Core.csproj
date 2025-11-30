@@ -2,13 +2,23 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0</TargetFrameworks>
     <RootNamespace>BbQ.MockLite</RootNamespace>
-    <Authors>MockLite</Authors>
+    <Authors>Jean Marc Mbouma</Authors>
     <PackageId>BbQ.MockLite</PackageId>
-    <Description>A lightweight, high-performance mocking framework for .NET that combines compile-time code generation with runtime flexibility. MockLite enables you to create optimized mock implementations at build time while providing fallback runtime proxies for dynamic scenarios.</Description>
+    <Title>BbQ.MockLite</Title>
+    <Description>A lightweight, high-performance mocking framework for .NET that combines compile-time code generation with runtime flexibility. Enables optimized mock implementations at build time with fallback runtime proxies for dynamic scenarios.</Description>
+    <PackageVersion>1.0.0</PackageVersion>
     <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/JeanMarcMbouma/MockLite</PackageProjectUrl>
+    <PackageTags>mocking;testing;source-generators;mock;unit-tests</PackageTags>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <DebugType>portable</DebugType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
 </Project>
