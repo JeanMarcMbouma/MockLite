@@ -313,4 +313,449 @@ public class TestClass
         var exception = Record.Exception(() => mock.GetValue("test"));
         Assert.Null(exception);
     }
+
+    // ==================== SETUP AND PROPERTY ACCESS TESTS ====================
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationsProperty_Exists()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+
+        // Act
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Assert
+        Assert.NotNull(invocationsProperty);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationsProperty_IsReadable()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        var isReadable = invocationsProperty?.CanRead;
+
+        // Assert
+        Assert.True(isReadable);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationsProperty_ReturnsCollection()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        var invocations = invocationsProperty?.GetValue(mock);
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.IsAssignableFrom<System.Collections.IList>(invocations);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationsInitialized_Empty()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.Empty(invocations);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_RecordsFirstInvocation()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue("test-key");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.Single(invocations);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_RecordsMultipleInvocations()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue("key1");
+        mock.GetValue("key2");
+        mock.GetNumber(42);
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.Equal(3, invocations.Count);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationContainsMethodInfo()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue("test");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var firstInvocation = invocations?[0];
+        var methodProperty = firstInvocation?.GetType().GetProperty("Method");
+        var method = methodProperty?.GetValue(firstInvocation);
+
+        // Assert
+        Assert.NotNull(methodProperty);
+        Assert.NotNull(method);
+        Assert.IsAssignableFrom<System.Reflection.MethodInfo>(method);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationMethodInfo_HasCorrectName()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+
+        // Act
+        mock.GetValue("test");
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var firstInvocation = invocations?[0];
+        var methodProperty = firstInvocation?.GetType().GetProperty("Method");
+        var method = methodProperty?.GetValue(firstInvocation) as System.Reflection.MethodInfo;
+
+        // Assert
+        Assert.NotNull(method);
+        Assert.Equal("GetValue", method.Name);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationContainsArgs()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue("test-arg");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var firstInvocation = invocations?[0];
+        var argsProperty = firstInvocation?.GetType().GetProperty("Arguments");
+
+        // Assert
+        Assert.NotNull(argsProperty);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationArgs_CapturesArgument()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        const string testArg = "test-argument";
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue(testArg);
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var firstInvocation = invocations?[0];
+        var argsProperty = firstInvocation?.GetType().GetProperty("Arguments");
+        var args = argsProperty?.GetValue(firstInvocation) as object[];
+
+        // Assert
+        Assert.NotNull(args);
+        Assert.Single(args);
+        Assert.Equal(testArg, args[0]);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationArgs_PreservesType()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        const int testNumber = 99;
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetNumber(testNumber);
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var firstInvocation = invocations?[0];
+        var argsProperty = firstInvocation?.GetType().GetProperty("Arguments");
+        var args = argsProperty?.GetValue(firstInvocation) as object[];
+
+        // Assert
+        Assert.NotNull(args);
+        Assert.Single(args);
+        Assert.IsType<int>(args[0]);
+        Assert.Equal(testNumber, args[0]);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_VoidMethod_RecordsInvocation()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.DoSomething();
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.Single(invocations);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_VoidMethod_Args_IsEmpty()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.DoSomething();
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var firstInvocation = invocations?[0];
+        var argsProperty = firstInvocation?.GetType().GetProperty("Arguments");
+        var args = argsProperty?.GetValue(firstInvocation) as object[];
+
+        // Assert
+        Assert.NotNull(args);
+        Assert.Empty(args);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_AsyncMethod_RecordsInvocation()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        var _ = mock.DoSomethingAsync();
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.Single(invocations);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_Setup_MethodExists()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+
+        // Act
+        var setupMethod = mockType.GetMethod("Setup",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        // Assert
+        Assert.NotNull(setupMethod);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_Setup_IsPublic()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+
+        // Act
+        var setupMethod = mockType.GetMethod("Setup",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        // Assert
+        Assert.NotNull(setupMethod);
+        Assert.True(setupMethod.IsPublic);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_Setup_AcceptsMethodInfoAndDelegate()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+
+        // Act
+        var setupMethod = mockType.GetMethod("Setup",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        // Assert
+        Assert.NotNull(setupMethod);
+        var parameters = setupMethod.GetParameters();
+        Assert.Equal(2, parameters.Length);
+        Assert.Equal(typeof(System.Reflection.MethodInfo), parameters[0].ParameterType);
+        Assert.Equal(typeof(Delegate), parameters[1].ParameterType);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationOrderMaintained()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue("first");
+        mock.GetValue("second");
+        mock.GetValue("third");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.Equal(3, invocations.Count);
+
+        var firstArgs = invocations[0]?.GetType().GetProperty("Arguments")?.GetValue(invocations[0]) as object[];
+        var secondArgs = invocations[1]?.GetType().GetProperty("Arguments")?.GetValue(invocations[1]) as object[];
+        var thirdArgs = invocations[2]?.GetType().GetProperty("Arguments")?.GetValue(invocations[2]) as object[];
+
+        Assert.Equal("first", firstArgs?[0]);
+        Assert.Equal("second", secondArgs?[0]);
+        Assert.Equal("third", thirdArgs?[0]);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_GenericInterface_RecordsInvocation()
+    {
+        // Arrange
+        var mock = Mock.Of<IGenericService<string>>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetItem("id1");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations);
+        Assert.Single(invocations);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_GenericInterface_CapturesGenericArgument()
+    {
+        // Arrange
+        var mock = Mock.Of<IGenericService<string>>();
+        const string testId = "test-id-123";
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetItem(testId);
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var firstInvocation = invocations?[0];
+        var argsProperty = firstInvocation?.GetType().GetProperty("Arguments");
+        var args = argsProperty?.GetValue(firstInvocation) as object[];
+
+        // Assert
+        Assert.NotNull(args);
+        Assert.Single(args);
+        Assert.Equal(testId, args[0]);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_MultipleInstances_HaveIndependentInvocations()
+    {
+        // Arrange
+        var mock1 = Mock.Of<ITestService>();
+        var mock2 = Mock.Of<ITestService>();
+
+        // Act
+        mock1.GetValue("instance1");
+        mock2.GetValue("instance2");
+
+        var invocations1 = mock1.GetType().GetProperty("Invocations")?.GetValue(mock1) as System.Collections.IList;
+        var invocations2 = mock2.GetType().GetProperty("Invocations")?.GetValue(mock2) as System.Collections.IList;
+
+        // Assert
+        Assert.NotNull(invocations1);
+        Assert.NotNull(invocations2);
+        Assert.Single(invocations1);
+        Assert.Single(invocations2);
+
+        var args1 = invocations1[0]?.GetType().GetProperty("Arguments")?.GetValue(invocations1[0]) as object[];
+        var args2 = invocations2[0]?.GetType().GetProperty("Arguments")?.GetValue(invocations2[0]) as object[];
+
+        Assert.Equal("instance1", args1?[0]);
+        Assert.Equal("instance2", args2?[0]);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_Invocations_CanBeCleared()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue("test");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var initialCount = invocations?.Count;
+
+        if (invocations?.Count > 0)
+        {
+            invocations.Clear();
+        }
+
+        // Assert
+        Assert.NotEqual(0, initialCount);
+        Assert.NotNull(invocations);
+        Assert.Empty(invocations);
+    }
+
+    [Fact]
+    public void Test_RuntimeProxy_InvocationIndex_AccessByIndex()
+    {
+        // Arrange
+        var mock = Mock.Of<ITestService>();
+        var mockType = mock.GetType();
+        var invocationsProperty = mockType.GetProperty("Invocations");
+
+        // Act
+        mock.GetValue("first");
+        mock.GetValue("second");
+        var invocations = invocationsProperty?.GetValue(mock) as System.Collections.IList;
+        var secondInvocation = invocations?[1];
+
+        // Assert
+        Assert.NotNull(secondInvocation);
+        var argsProperty = secondInvocation.GetType().GetProperty("Arguments");
+        var args = argsProperty?.GetValue(secondInvocation) as object[];
+        Assert.Equal("second", args?[0]);
+    }
 }
