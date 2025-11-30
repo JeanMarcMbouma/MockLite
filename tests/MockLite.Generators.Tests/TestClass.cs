@@ -1,5 +1,7 @@
 ﻿using MockLite;
 
+namespace MockLite.Generators.Tests;
+
 [GenerateMock<IUserService>]
 public partial class Mocks { }
 
@@ -18,7 +20,7 @@ public class TestClass
     {
 
         var svc = new MockUserService()
-            .SetupGetCount((string category) => category.Length)            // behavior directly
+            .SetupGetCount(category => category.Length)            // behavior directly
             .ReturnsGetUserAsync(new User("Jean"));                         // async returns
 
         svc.GetCount("alpha");               // 5

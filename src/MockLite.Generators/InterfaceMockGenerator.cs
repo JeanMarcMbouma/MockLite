@@ -1,5 +1,4 @@
-﻿// src/MockLite.Generators/Generators/Diagnostics.cs
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
@@ -94,7 +93,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine("using MockLite;");
 
         if (!string.IsNullOrEmpty(ns)) sb.AppendLine($"namespace {ns} {{");
-
+        sb.AppendLine("[GeneratedMock]");
         sb.AppendLine($"public sealed class {className} : {ifaceDisplay}");
         sb.AppendLine("{");
         sb.AppendLine("    public List<Invocation> Invocations { get; } = new();");
