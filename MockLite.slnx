@@ -4,5 +4,4 @@
   <Project Path="src/MockLite.Sample/MockLite.Sample.csproj" />
   <Project Path="tests/MockLite.Core.Tests/MockLite.Core.Tests.csproj" />
   <Project Path="tests/MockLite.Generators.Tests/MockLite.Generators.Tests.csproj" />
-  <Project Path="tests/MockLite.Integration.Tests/MockLite.Integration.Tests.csproj" />
 </Solution>
