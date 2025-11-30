@@ -7,13 +7,29 @@ using System.Reflection;
 
 namespace MockLite;
 
-
-
-internal sealed class RuntimeProxy<T> : DispatchProxy where T : class
+/// <summary>
+/// Runtime-based mock proxy using DispatchProxy for interfaces without generated mocks.
+/// </summary>
+/// <remarks>
+/// This is an internal helper class that provides fallback mocking functionality
+/// when a generated mock is not available. It intercepts method calls and manages
+/// behaviors and invocations at runtime.
+/// 
+/// For better performance, prefer using <see cref="GenerateMockAttribute"/> to
+/// generate compile-time mock implementations instead of relying on this runtime proxy.
+/// </remarks>
+internal class RuntimeProxy<T> : DispatchProxy where T : class
 {
+    /// <summary>
+    /// Gets the list of all method invocations recorded on this mock.
+    /// </summary>
     public List<Invocation> Invocations { get; } = [];
+
     private readonly Dictionary<string, Delegate> _behaviors = [];
 
+    /// <summary>
+    /// Intercepts method calls on the proxied interface.
+    /// </summary>
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
         args ??= [];
@@ -41,6 +57,11 @@ internal sealed class RuntimeProxy<T> : DispatchProxy where T : class
         return GetDefault(ret);
     }
 
+    /// <summary>
+    /// Sets up the behavior for a specific method.
+    /// </summary>
+    /// <param name="method">The method to set up behavior for.</param>
+    /// <param name="behavior">The delegate that implements the method behavior.</param>
     public void Setup(MethodInfo method, Delegate behavior)
         => _behaviors[SignatureKey(method)] = behavior;
 
@@ -53,8 +74,16 @@ internal sealed class RuntimeProxy<T> : DispatchProxy where T : class
     private static object? GetDefault(Type t) => t.IsValueType ? Activator.CreateInstance(t) : null;
 }
 
+/// <summary>
+/// Factory for creating runtime proxy mocks.
+/// </summary>
 internal static class RuntimeProxy
 {
+    /// <summary>
+    /// Creates a runtime proxy mock for the specified interface type.
+    /// </summary>
+    /// <typeparam name="T">The interface type to mock.</typeparam>
+    /// <returns>A dynamic proxy instance implementing the interface.</returns>
     public static T Create<T>() where T : class
         => (T)DispatchProxy.Create<T, RuntimeProxy<T>>();
 }
