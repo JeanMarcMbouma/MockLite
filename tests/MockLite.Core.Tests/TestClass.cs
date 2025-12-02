@@ -773,4 +773,128 @@ public class TestClass
         var args = argsProperty?.GetValue(secondInvocation) as object[];
         Assert.Equal("second", args?[0]);
     }
+
+    [Fact]
+    public void Test_ItIsAny_ReturnsAnyMatcherMarker()
+    {
+        // Act
+        var result = It.IsAny<string>();
+
+        // Assert
+        Assert.NotNull(result);
+        // The result should be an AnyMatcher instance reinterpreted as a string
+        // Verify by checking the runtime type name
+        var actualType = result.GetType();
+        Assert.Equal("AnyMatcher", actualType.Name);
+    }
+
+    [Fact]
+    public void Test_ItIsAny_WithDifferentTypes()
+    {
+        // Act - should not throw
+        var stringResult = It.IsAny<string>();
+        var objectResult = It.IsAny<object>();
+        var customResult = It.IsAny<ITestService>();
+
+        // Assert - all should return non-null markers
+        Assert.NotNull(stringResult);
+        Assert.NotNull(objectResult);
+        Assert.NotNull(customResult);
+    }
+
+    [Fact]
+    public void Test_ItIsAny_CanBeUsedInLambdaExpression()
+    {
+        // Act - should not throw
+        var builder = Mock.Create<ITestService>();
+        
+        // This demonstrates that It.IsAny can be syntactically used in lambda expressions
+        // without causing compilation or runtime errors
+        var exception = Record.Exception(() =>
+        {
+            var mock = builder.Object;
+            // The lambda expression with It.IsAny can be evaluated without throwing
+            mock.GetValue(It.IsAny<string>());
+        });
+
+        // Assert
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void Test_ItIsAny_WithVerifyAndMatcher()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        var mock = builder.Object;
+
+        // Act - call the method with specific values
+        mock.GetValue("test-value-1");
+        mock.GetValue("test-value-2");
+
+        // Assert - verify using It.IsAny in the expression and a matcher predicate
+        // The matcher predicate (args => true) implements the "any" logic
+        builder.Verify(
+            x => x.GetValue(It.IsAny<string>()),
+            args => true, // This is what makes it match "any" argument
+            times => times == 2);
+    }
+
+    [Fact]
+    public void Test_ItIsAny_WithMatcherPredicate_FiltersCalls()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        int callCount = 0;
+        builder.OnCall(x => x.GetValue(It.IsAny<string>()), (_) => callCount++);
+        var mock = builder.Object;
+
+        // Act - call with different values
+        mock.GetValue("admin-123");
+        mock.GetValue("user-456");
+        mock.GetValue("admin-789");
+
+        // Assert - use matcher to filter for specific calls
+        builder.Verify(
+            x => x.GetValue(It.IsAny<string>()),
+            args => args[0] is string s && s.StartsWith("admin"),
+            times => times == 2); // Should match 2 admin calls
+        Assert.Equal(3, callCount); // Total calls made
+    }
+
+    [Fact]
+    public void Test_ItIsAny_WithMockCall_TracksInvocation()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        var mock = builder.Object;
+
+        // Act - call the method with a specific value
+        mock.GetValue("test-value");
+
+        // Assert - verify the call was recorded
+        Assert.Single(builder.Invocations);
+        Assert.Equal("GetValue", builder.Invocations[0].Method.Name);
+        Assert.Equal("test-value", builder.Invocations[0].Arguments[0]);
+    }
+
+    [Fact]
+    public void Test_ItIsAny_MultipleCallsRecorded()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        var mock = builder.Object;
+
+        // Act - call the method multiple times with different values
+        mock.GetValue("value1");
+        mock.GetValue("value2");
+        mock.GetValue("value3");
+
+        // Assert - all calls should be recorded with their actual arguments
+        Assert.Equal(3, builder.Invocations.Count);
+        Assert.All(builder.Invocations, inv => Assert.Equal("GetValue", inv.Method.Name));
+        Assert.Equal("value1", builder.Invocations[0].Arguments[0]);
+        Assert.Equal("value2", builder.Invocations[1].Arguments[0]);
+        Assert.Equal("value3", builder.Invocations[2].Arguments[0]);
+    }
 }

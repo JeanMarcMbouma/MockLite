@@ -783,16 +783,3 @@ public class MockCreateTests
         Assert.Null(await task);
     }
 }
-
-/// <summary>
-/// Helper class for argument matching in Mock.Create verifications.
-/// </summary>
-public static class It
-{
-    /// <summary>
-    /// Matches any argument of type T in verification expressions.
-    /// </summary>
-    /// <typeparam name="T">The type of the argument to match.</typeparam>
-    /// <returns>Default value of T (used as placeholder in lambda expressions).</returns>
-    public static T IsAny<T>() => default(T)!;
-}

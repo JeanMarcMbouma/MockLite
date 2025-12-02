@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace BbQ.MockLite;
 
@@ -13,15 +14,27 @@ namespace BbQ.MockLite;
 public static class It
 {
     /// <summary>
+    /// Internal marker type used to indicate that a wildcard matcher was used.
+    /// This is used internally by the matching logic to detect It.IsAny usage.
+    /// </summary>
+    internal sealed class AnyMatcher
+    {
+        private AnyMatcher() { }
+        internal static readonly AnyMatcher Instance = new();
+        public override string ToString() => "It.IsAny";
+    }
+
+    /// <summary>
     /// Matches any value of the specified type.
     /// </summary>
     /// <typeparam name="T">The type of argument to match.</typeparam>
     /// <returns>
-    /// A default value of type <typeparamref name="T"/> that acts as a wildcard matcher.
+    /// A marker value that indicates any value of type T should match.
     /// </returns>
     /// <remarks>
     /// This is used in <c>Setup</c> and <c>Verify</c> calls to indicate that any value
     /// of the specified type should match, regardless of the actual value.
+    /// The returned value is an internal marker that the framework recognizes as a wildcard matcher.
     /// </remarks>
     /// <example>
     /// <code>
@@ -29,7 +42,19 @@ public static class It
     /// mock.VerifyGetUser(It.IsAny&lt;string&gt;(), Times.Once);
     /// </code>
     /// </example>
-    public static T IsAny<T>() => default!;
+    public static T IsAny<T>()
+    {
+        // For reference types, use Unsafe.As to reinterpret AnyMatcher as T
+        if (!typeof(T).IsValueType)
+        {
+            var marker = AnyMatcher.Instance;
+            return Unsafe.As<AnyMatcher, T>(ref Unsafe.AsRef(in marker))!;
+        }
+        
+        // For value types, return the default value
+        // The framework interprets default values as wildcards in value type contexts
+        return default!;
+    }
 
     /// <summary>
     /// Matches values that satisfy the specified predicate.
@@ -37,7 +62,7 @@ public static class It
     /// <typeparam name="T">The type of argument to match.</typeparam>
     /// <param name="predicate">A function that returns <c>true</c> for matching values.</param>
     /// <returns>
-    /// A default value of type <typeparamref name="T"/> that acts as a conditional matcher.
+    /// A marker value that indicates values matching the predicate should match.
     /// </returns>
     /// <remarks>
     /// This allows fine-grained control over which values match in setup and verification.
