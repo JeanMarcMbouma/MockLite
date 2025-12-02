@@ -44,16 +44,8 @@ public static class It
     /// </example>
     public static T IsAny<T>()
     {
-        // For reference types, use Unsafe.As to reinterpret AnyMatcher as T
-        if (!typeof(T).IsValueType)
-        {
-            var marker = AnyMatcher.Instance;
-            return Unsafe.As<AnyMatcher, T>(ref Unsafe.AsRef(in marker))!;
-        }
-        
-        // For value types, return the default value
-        // The framework interprets default values as wildcards in value type contexts
-        return default!;
+        var marker = AnyMatcher.Instance;
+        return Unsafe.As<AnyMatcher, T>(ref Unsafe.AsRef(in marker))!;
     }
 
     /// <summary>
@@ -79,3 +71,6 @@ public static class It
     /// </example>
     public static T Matches<T>(Predicate<T> predicate) => default!;
 }
+
+
+public readonly record struct IsAny<T>;

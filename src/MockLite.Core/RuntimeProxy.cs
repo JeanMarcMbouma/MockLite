@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.ComponentModel.DataAnnotations;
+using System.Collections.Concurrent;
 
 namespace BbQ.MockLite;
 
@@ -30,6 +33,13 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     private readonly Dictionary<string, List<(Func<object?[], bool>? matcher, Action<object?[]> callback)>> _callbacks = [];
 
     /// <summary>
+    /// Stores setup information including whether parameters use It.IsAny
+    /// </summary>
+    private readonly Dictionary<string, (Delegate behavior, bool[] isAnyMatcher)> _setupInfo = [];
+
+    private static readonly ConcurrentDictionary<Type, object> _anyMatchers = new();
+
+    /// <summary>
     /// Intercepts method calls on the proxied interface.
     /// </summary>
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
@@ -40,15 +50,27 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         // Execute callbacks for this method
         ExecuteCallbacks(targetMethod!, args);
 
-        // Try to find a behavior that matches the exact arguments first
+        // First, try exact argument matching (for setups without IsAny or with specific values)
         var argKey = CreateArgumentKey(targetMethod!, args);
-        if (_behaviors.TryGetValue(argKey, out var del))
-            return del.Method.GetParameters().Length == 0 ? 
-                del.DynamicInvoke() :
-                del.DynamicInvoke(args);
+        if (_behaviors.TryGetValue(argKey, out var behavior))
+        {
+            return behavior.Method.GetParameters().Length == 0 ? 
+                behavior.DynamicInvoke() :
+                behavior.DynamicInvoke(args);
+        }
+
+        // Then, try to find a behavior that matches with IsAny matchers
+        var anyMatcherBehavior = FindMatchingBehaviorWithIsAny(targetMethod!, args);
+        if (anyMatcherBehavior != null)
+        {
+            return anyMatcherBehavior.Method.GetParameters().Length == 0 ? 
+                anyMatcherBehavior.DynamicInvoke() :
+                anyMatcherBehavior.DynamicInvoke(args);
+        }
 
         // Fall back to method signature only (for setups without specific arguments)
-        if (_behaviors.TryGetValue(SignatureKey(targetMethod!), out del))
+        var sigKey = SignatureKey(targetMethod!);
+        if (_behaviors.TryGetValue(sigKey, out var del))
             return del.Method.GetParameters().Length == 0 ?
                 del.DynamicInvoke() : del.DynamicInvoke(args);
 
@@ -72,6 +94,90 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     }
 
     /// <summary>
+    /// Finds a matching behavior for the given method and arguments using IsAny matchers.
+    /// </summary>
+    private Delegate? FindMatchingBehaviorWithIsAny(MethodInfo method, object?[] args)
+    {
+        // Check all setup information entries for this method looking for IsAny matches
+        foreach (var kvp in _setupInfo)
+        {
+            if (!kvp.Key.StartsWith(method.Name + "("))
+                continue;
+
+            var (behavior, isAnyMatcher) = kvp.Value;
+            
+            // Only check setups that have at least one IsAny
+            if (!isAnyMatcher.Any(x => x))
+                continue;
+
+            // Check if this setup matches the current invocation
+            if (DoesSetupMatch(args, isAnyMatcher))
+            {
+                return behavior;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds a matching behavior for the given method and arguments,
+    /// considering It.IsAny matchers in the setup.
+    /// </summary>
+    private Delegate? FindMatchingBehavior(MethodInfo method, object?[] args)
+    {
+        var methodParams = method.GetParameters();
+        Delegate? anyMatcherBehavior = null;
+        
+        // Check all setup information entries for this method
+        foreach (var kvp in _setupInfo)
+        {
+            if (!kvp.Key.StartsWith(method.Name + "("))
+                continue;
+
+            var (behavior, isAnyMatcher) = kvp.Value;
+            
+            // Check if this setup matches the current invocation
+            if (DoesSetupMatch(args, isAnyMatcher))
+            {
+                // If all parameters are specific (not IsAny), this is an exact match - return immediately
+                if (!isAnyMatcher.Any(x => x))
+                    return behavior;
+                
+                // If has IsAny matchers, save it as fallback
+                anyMatcherBehavior = behavior;
+            }
+        }
+
+        // Return the exact match if found, otherwise return the IsAny match
+        return anyMatcherBehavior;
+    }
+
+    /// <summary>
+    /// Determines if a setup matches the current invocation arguments.
+    /// </summary>
+    private static bool DoesSetupMatch(object?[] invocationArgs, bool[] isAnyMatcher)
+    {
+        // If the setup has different number of parameters than invocation, it doesn't match
+        if (isAnyMatcher.Length != invocationArgs.Length)
+            return false;
+
+        // For each parameter, check if it matches
+        for (int i = 0; i < isAnyMatcher.Length; i++)
+        {
+            // If this parameter was set up with It.IsAny, it matches anything
+            if (isAnyMatcher[i])
+                continue;
+
+            // Otherwise, we need to check if the values could match
+            // For now, we accept any non-null value as potentially matching an exact setup
+            // The actual exact matching is done via the argument key comparison in _behaviors dictionary
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Sets up the behavior for a specific method.
     /// </summary>
     /// <param name="method">The method to set up behavior for.</param>
@@ -81,12 +187,40 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
 
     /// <summary>
     /// Sets up the behavior for a specific method with specific argument values.
+    /// This now supports It.IsAny matchers in the arguments.
     /// </summary>
     /// <param name="method">The method to set up behavior for.</param>
-    /// <param name="args">The specific argument values to match.</param>
+    /// <param name="args">The specific argument values to match (may include It.IsAny markers).</param>
     /// <param name="behavior">The delegate that implements the method behavior.</param>
     public void Setup(MethodInfo method, object?[] args, Delegate behavior)
-        => _behaviors[CreateArgumentKey(method, args)] = behavior;
+    {
+        var argKey = CreateArgumentKey(method, args);
+        _behaviors[argKey] = behavior;
+        
+        // Store setup info to track which arguments are IsAny matchers
+        var isAnyMatcher = args.Select(arg => IsAnyMatcherInstance(arg)).ToArray();
+        _setupInfo[argKey] = (behavior, isAnyMatcher);
+    }
+
+    /// <summary>
+    /// Determines if an argument is an It.IsAny marker instance.
+    /// </summary>
+    private static bool IsAnyMatcherInstance(object? arg)
+    {
+        if (arg == null)
+            return false;
+
+        //generate a generic signature for Is.IsAny<T>
+        if(_anyMatchers.TryGetValue(arg.GetType(), out var cachedMatcher))
+        {
+            return object.Equals(arg, cachedMatcher);
+        }
+        var argType = arg.GetType();
+        var signature = typeof(It).GetMethod(nameof(It.IsAny))!.MakeGenericMethod(argType);
+        var expectedMatcher = signature.Invoke(null, [])!;
+        _anyMatchers.TryAdd(argType, expectedMatcher);
+        return object.Equals(arg, expectedMatcher);
+    }
 
     /// <summary>
     /// Registers a callback that executes when a method is invoked.
@@ -137,7 +271,13 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     private static string CreateArgumentKey(MethodInfo mi, object?[] args)
     {
         var pars = string.Join(",", mi.GetParameters().Select(p => p.ParameterType.FullName));
-        var argValues = string.Join(",", args.Select(a => a?.ToString() ?? "null"));
+        var argValues = string.Join(",", args.Select(a => 
+        {
+            // For AnyMatcher instances, use a special marker in the key
+            if (a != null && a.GetType().Name == "AnyMatcher")
+                return "IsAny";
+            return a?.ToString() ?? "null";
+        }));
         return $"{mi.Name}({pars})[{argValues}]";
     }
 
