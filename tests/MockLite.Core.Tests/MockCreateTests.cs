@@ -19,7 +19,7 @@ public class MockCreateTests
 
         // Assert
         Assert.NotNull(builder);
-        Assert.IsType<MockBuilder<ITestService>>(builder);
+        Assert.IsType<Mock<ITestService>>(builder);
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class MockCreateTests
 
         // Assert
         Assert.NotNull(builder);
-        Assert.IsType<MockBuilder<IGenericService<string>>>(builder);
+        Assert.IsType<Mock<IGenericService<string>>>(builder);
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class MockCreateTests
 
         // Assert
         Assert.NotNull(builder);
-        Assert.IsAssignableFrom<MockBuilder<IPropertyService>>(builder);
+        Assert.IsAssignableFrom<Mock<IPropertyService>>(builder);
     }
 
     // ==================== MOCK BUILDER OBJECT TESTS ====================
