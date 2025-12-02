@@ -27,6 +27,8 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
 
     private readonly Dictionary<string, Delegate> _behaviors = [];
 
+    private readonly Dictionary<string, List<(Func<object?[], bool>? matcher, Action<object?[]> callback)>> _callbacks = [];
+
     /// <summary>
     /// Intercepts method calls on the proxied interface.
     /// </summary>
@@ -34,6 +36,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     {
         args ??= [];
         Invocations.Add(new Invocation(targetMethod!, args!));
+
+        // Execute callbacks for this method
+        ExecuteCallbacks(targetMethod!, args);
 
         // Try to find a behavior that matches the exact arguments first
         var argKey = CreateArgumentKey(targetMethod!, args);
@@ -82,6 +87,46 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// <param name="behavior">The delegate that implements the method behavior.</param>
     public void Setup(MethodInfo method, object?[] args, Delegate behavior)
         => _behaviors[CreateArgumentKey(method, args)] = behavior;
+
+    /// <summary>
+    /// Registers a callback that executes when a method is invoked.
+    /// </summary>
+    /// <param name="method">The method to register the callback for.</param>
+    /// <param name="callback">The callback action to execute.</param>
+    public void OnInvocation(MethodInfo method, Action<object?[]> callback)
+        => OnInvocation(method, null, callback);
+
+    /// <summary>
+    /// Registers a callback that executes when a method is invoked with matching arguments.
+    /// </summary>
+    /// <param name="method">The method to register the callback for.</param>
+    /// <param name="matcher">Optional predicate to match arguments.</param>
+    /// <param name="callback">The callback action to execute.</param>
+    public void OnInvocation(MethodInfo method, Func<object?[], bool>? matcher, Action<object?[]> callback)
+    {
+        var key = SignatureKey(method);
+        if (!_callbacks.ContainsKey(key))
+            _callbacks[key] = [];
+        _callbacks[key].Add((matcher, callback));
+    }
+
+    /// <summary>
+    /// Executes all registered callbacks for a method invocation.
+    /// </summary>
+    private void ExecuteCallbacks(MethodInfo method, object?[] args)
+    {
+        var key = SignatureKey(method);
+        if (_callbacks.TryGetValue(key, out var callbackList))
+        {
+            foreach (var (matcher, callback) in callbackList)
+            {
+                if (matcher == null || matcher(args))
+                {
+                    callback(args);
+                }
+            }
+        }
+    }
 
     private static string SignatureKey(MethodInfo mi)
     {

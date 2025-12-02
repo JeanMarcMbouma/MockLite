@@ -333,21 +333,266 @@ public sealed class Mock<T> where T : class
     }
 
     /// <summary>
-    /// Extracts property information from a lambda expression.
+    /// Extracts the method information from a void lambda expression.
     /// </summary>
-    /// <param name="expr">A lambda expression to analyze.</param>
-    /// <returns>The PropertyInfo of the target property.</returns>
-    /// <exception cref="ArgumentException">Thrown if the expression is not a property access.</exception>
+    /// <param name="expr">A void lambda expression to analyze.</param>
+    /// <returns>The MethodInfo of the target method.</returns>
+    /// <exception cref="ArgumentException">Thrown if the expression is not a method call.</exception>
     /// <remarks>
-    /// This helper parses lambda expressions to identify which property is being accessed,
-    /// allowing the builder to set up or verify property getters and setters independently.
-    /// Supports both read-only and read-write properties.
+    /// This helper parses void lambda expressions (Action) to identify which method is being targeted.
     /// </remarks>
+    private static MethodInfo ExtractVoidMethod(Expression<Action<T>> expr)
+    {
+        if (expr.Body is MethodCallExpression call)
+            return call.Method;
+        throw new ArgumentException("Expression must be a method call");
+    }
+
     private static PropertyInfo ExtractProperty(LambdaExpression expr)
     {
         if (expr.Body is MemberExpression member && member.Member is PropertyInfo pi)
             return pi;
         throw new ArgumentException("Expression must be a property access");
+    }
+
+    // --- Callback Methods ---
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a method is called.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="callback">An action that executes when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The callback is executed before the method returns. This is useful for side effects
+    /// such as logging, state modifications, or triggering additional actions.
+    /// The callback receives the method arguments as an object array.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var callCount = 0;
+    /// mock.OnCall(x => x.SaveUser(It.IsAny&lt;User&gt;()), 
+    ///     args => callCount++);
+    /// 
+    /// mock.SaveUser(user);
+    /// Assert.Equal(1, callCount);
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall(Expression<Func<T, object?>> expression, Action<object?[]> callback)
+    {
+        var (method, _) = ExtractMethod(expression);
+        _proxy.OnInvocation(method, callback);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a method is called with specific arguments.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="matcher">A predicate that determines if the invocation arguments match.</param>
+    /// <param name="callback">An action that executes when the method is called with matching arguments.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The callback is only executed if the matcher predicate returns true for the method arguments.
+    /// This allows conditional custom logic based on the specific arguments passed to the method.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var savedUsers = new List&lt;User&gt;();
+    /// mock.OnCall(
+    ///     x => x.SaveUser(It.IsAny&lt;User&gt;()),
+    ///     args => args[0] is User u && u.Id.StartsWith("admin"),
+    ///     args => savedUsers.Add((User)args[0]));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall(Expression<Func<T, object?>> expression, Func<object?[], bool> matcher, Action<object?[]> callback)
+    {
+        var (method, _) = ExtractMethod(expression);
+        _proxy.OnInvocation(method, matcher, callback);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a void method is called.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the void method to set up.</param>
+    /// <param name="callback">An action that executes when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload is specifically for void methods that don't return a value.
+    /// The callback is executed when the method is invoked.
+    /// The callback receives the method arguments as an object array.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var callCount = 0;
+    /// mock.OnCall(x => x.DoSomething(), 
+    ///     args => callCount++);
+    /// 
+    /// mock.DoSomething();
+    /// Assert.Equal(1, callCount);
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall(Expression<Action<T>> expression, Action<object?[]> callback)
+    {
+        var method = ExtractVoidMethod(expression);
+        _proxy.OnInvocation(method, callback);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a void method is called with specific arguments.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the void method to set up.</param>
+    /// <param name="matcher">A predicate that determines if the invocation arguments match.</param>
+    /// <param name="callback">An action that executes when the method is called with matching arguments.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload is for void methods with argument matching.
+    /// The callback is only executed if the matcher predicate returns true for the method arguments.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var savedCount = 0;
+    /// mock.OnCall(
+    ///     x => x.SaveUser(It.IsAny&lt;User&gt;()),
+    ///     args => args[0] is User u && u.IsAdmin,
+    ///     args => savedCount++);
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall(Expression<Action<T>> expression, Func<object?[], bool> matcher, Action<object?[]> callback)
+    {
+        var method = ExtractVoidMethod(expression);
+        _proxy.OnInvocation(method, matcher, callback);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a property is accessed or modified.
+    /// </summary>
+    /// <typeparam name="TProp">The type of the property.</typeparam>
+    /// <param name="property">A lambda expression identifying the property.</param>
+    /// <param name="callback">An action that executes on property access/modification.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This callback is invoked whenever the property getter or setter is accessed.
+    /// Use <see cref="OnGetCallback{TProp}"/> or <see cref="OnSetCallback{TProp}"/> 
+    /// for more specific control over getter/setter callbacks.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var accessLog = new List&lt;string&gt;();
+    /// mock.OnPropertyAccess(x => x.Name, 
+    ///     () => accessLog.Add("Name accessed"));
+    /// 
+    /// var name = mock.Name;
+    /// Assert.Single(accessLog);
+    /// </code>
+    /// </example>
+    public Mock<T> OnPropertyAccess<TProp>(Expression<Func<T, TProp>> property, Action callback)
+    {
+        var pi = ExtractProperty(property);
+        if (pi.GetMethod != null)
+            _proxy.OnInvocation(pi.GetMethod, _ => callback());
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a property getter is accessed.
+    /// </summary>
+    /// <typeparam name="TProp">The type of the property.</typeparam>
+    /// <param name="property">A lambda expression identifying the property.</param>
+    /// <param name="callback">An action that executes when the property is read.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The callback is executed before the property value is returned.
+    /// This is useful for logging property access or triggering side effects.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var getCount = 0;
+    /// mock.OnGetCallback(x => x.Count, () => getCount++);
+    /// 
+    /// var _ = mock.Count;
+    /// Assert.Equal(1, getCount);
+    /// </code>
+    /// </example>
+    public Mock<T> OnGetCallback<TProp>(Expression<Func<T, TProp>> property, Action callback)
+    {
+        var pi = ExtractProperty(property);
+        if (pi.GetMethod != null)
+            _proxy.OnInvocation(pi.GetMethod, _ => callback());
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a property setter is called.
+    /// </summary>
+    /// <typeparam name="TProp">The type of the property.</typeparam>
+    /// <param name="property">A lambda expression identifying the property.</param>
+    /// <param name="callback">An action that receives the assigned value when the property is set.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The callback receives the value being assigned to the property.
+    /// This is useful for logging property modifications or maintaining state.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var setValues = new List&lt;string&gt;();
+    /// mock.OnSetCallback(x => x.Name, value => setValues.Add(value));
+    /// 
+    /// mock.Name = "Alice";
+    /// mock.Name = "Bob";
+    /// Assert.Equal(2, setValues.Count);
+    /// Assert.Contains("Alice", setValues);
+    /// </code>
+    /// </example>
+    public Mock<T> OnSetCallback<TProp>(Expression<Func<T, TProp>> property, Action<TProp> callback)
+    {
+        var pi = ExtractProperty(property);
+        if (pi.SetMethod != null)
+            _proxy.OnInvocation(pi.SetMethod, args => callback((TProp)(args.FirstOrDefault() ?? default(TProp)!)));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that executes custom logic when a property setter is called with a specific value.
+    /// </summary>
+    /// <typeparam name="TProp">The type of the property.</typeparam>
+    /// <param name="property">A lambda expression identifying the property.</param>
+    /// <param name="matcher">A predicate that determines if the assigned value matches.</param>
+    /// <param name="callback">An action that receives the matching value.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The callback is only executed if the matcher predicate returns true for the assigned value.
+    /// This allows conditional custom logic based on specific property values.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var adminNames = new List&lt;string&gt;();
+    /// mock.OnSetCallback(
+    ///     x => x.Name, 
+    ///     value => value.StartsWith("admin"),
+    ///     value => adminNames.Add(value));
+    /// 
+    /// mock.Name = "user1";
+    /// mock.Name = "admin1";
+    /// Assert.Single(adminNames);
+    /// </code>
+    /// </example>
+    public Mock<T> OnSetCallback<TProp>(Expression<Func<T, TProp>> property, Func<TProp, bool> matcher, Action<TProp> callback)
+    {
+        var pi = ExtractProperty(property);
+        if (pi.SetMethod != null)
+        {
+            _proxy.OnInvocation(pi.SetMethod, args =>
+            {
+                var value = (TProp)(args.FirstOrDefault() ?? default(TProp)!);
+                if (matcher(value))
+                    callback(value);
+            });
+        }
+        return this;
     }
 }
 

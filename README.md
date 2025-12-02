@@ -11,6 +11,7 @@ A lightweight, high-performance mocking framework for .NET that combines compile
 - 📝 **Invocation Recording** - Automatically records all method invocations with timestamps for verification
 - 🎯 **Argument Matching** - Pattern matching for mock setup and verification
 - 🔍 **Verification** - Flexible verification with Times predicates (`Once`, `Never`, `Exactly`, `AtLeast`, `AtMost`)
+- 🔗 **Callbacks** - Execute custom logic when methods are called or properties are accessed
 - 🎓 **Easy API** - Simple, intuitive API inspired by popular mocking frameworks
 
 ## Getting Started
@@ -108,9 +109,71 @@ foreach (var invocation in builder.Invocations)
 - `VerifySet<TProp>(property, times)` - Verify property setter call count
 - `VerifySet<TProp>(property, matcher, times)` - Verify property setter with value matching
 
+**Callback Methods:**
+- `OnCall(expression, callback)` - Execute logic when method is called
+- `OnCall(expression, matcher, callback)` - Execute logic when method is called with matching arguments
+- `OnPropertyAccess<T>(property, callback)` - Execute logic on property get or set
+- `OnGetCallback<T>(property, callback)` - Execute logic when property getter is accessed
+- `OnSetCallback<T>(property, callback)` - Execute logic when property setter is called
+- `OnSetCallback<T>(property, matcher, callback)` - Execute logic when property setter is called with matching value
+
 **Properties:**
 - `Object` - Get the mock instance
 - `Invocations` - Access all recorded invocations for custom verification
+
+## Callbacks for Custom Logic Execution
+
+BbQ.MockLite supports callbacks that execute custom logic when methods are called or properties are accessed. This is useful for audit logging, state management, and complex verification scenarios.
+
+```csharp
+using BbQ.MockLite;
+
+// Track method calls with custom logic
+var auditLog = new List<string>();
+var builder = Mock.Create<IUserRepository>()
+    .OnCall(x => x.GetUser(It.IsAny<string>()),
+        args => auditLog.Add($"GetUser called with: {args[0]}"))
+    .OnCall(x => x.SaveUser(It.IsAny<User>()),
+        args => args[0] is User u && u.IsAdmin,
+        args => auditLog.Add($"Admin user saved: {((User)args[0]).Name}"));
+
+var mock = builder.Object;
+
+// Use the mock
+var user = mock.GetUser("123");
+mock.SaveUser(new User { Name = "Admin", IsAdmin = true });
+
+// Verify callbacks were executed
+Assert.Equal(2, auditLog.Count);
+```
+
+### Callback Patterns
+
+**Track method calls:**
+```csharp
+var callCount = 0;
+mock.OnCall(x => x.Process(It.IsAny<string>()), 
+    args => callCount++);
+```
+
+**Conditional callbacks:**
+```csharp
+var adminActions = new List<string>();
+mock.OnCall(
+    x => x.Execute(It.IsAny<string>()),
+    args => args[0] is string s && s.StartsWith("admin"),
+    args => adminActions.Add((string)args[0]));
+```
+
+**Track property access:**
+```csharp
+var propertyLog = new List<string>();
+mock
+    .OnGetCallback(x => x.Status, 
+        () => propertyLog.Add("Status read"))
+    .OnSetCallback(x => x.Status, 
+        value => propertyLog.Add($"Status set to: {value}"));
+```
 
 ## Two-Tier Mocking Strategy
 
@@ -208,7 +271,7 @@ var mock = Mock.Of<IAsyncRepository>();
 
 ## Project Structure
 
-- **BbQ.MockLite** - Core runtime helpers (DispatchProxy, invocation recording)
+- **BbQ.MockLite** - Core runtime helpers (DispatchProxy, invocation recording, callbacks)
 - **BbQ.MockLite.Generators** - Source generator for compile-time mock generation
 - **BbQ.MockLite.Sample** - Comprehensive examples and usage patterns
 - **BbQ.MockLite.Tests** - Unit tests for core functionality
@@ -222,9 +285,9 @@ BbQ.MockLite Framework
 │   └── Generates optimized MockXxx classes from [GenerateMock] interfaces
 │
 ├── Core Runtime (Execution-time)
-│   ├── RuntimeProxy<T> - DispatchProxy-based fallback implementation
+│   ├── RuntimeProxy<T> - DispatchProxy-based fallback with callback support
 │   ├── Invocation - Records method calls with timestamps
-│   ├── MockBuilder<T> - Fluent API for advanced mock creation
+│   ├── Mock<T> - Fluent builder for setup, verification, and callbacks
 │   └── Mock - Factory for creating mock instances
 │
 └── Supporting Infrastructure
@@ -239,7 +302,8 @@ BbQ.MockLite Framework
 2. **Setup First** - Configure mock behavior before using in tests
 3. **Verify Behaviors** - Use the verification API to assert interactions
 4. **Use Argument Matchers** - `It.IsAny<T>()` for flexible matching
-5. **Record Invocations** - Leverage invocation recording for complex verification scenarios
+5. **Leverage Callbacks** - Use callbacks for audit logging and state tracking
+6. **Record Invocations** - Leverage invocation recording for complex verification scenarios
 
 ## Examples
 
@@ -251,7 +315,15 @@ See the [BbQ.MockLite.Sample](./src/MockLite.Sample/Program.cs) project for comp
 - Exception handling
 - Async methods
 - Invocation recording
+- Callback usage
 - Complete integration scenarios
+
+## Documentation
+
+For detailed documentation on callbacks and advanced features, see:
+- [Callback Feature Guide](./CALLBACK_FEATURE_GUIDE.md) - Complete API reference
+- [Callback Quick Reference](./CALLBACK_QUICK_REFERENCE.md) - Quick start and examples
+- [Feature Summary](./FEATURE_COMPLETE_SUMMARY.md) - Implementation overview
 
 ## Requirements
 
