@@ -35,7 +35,7 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// <summary>
     /// Stores setup information including whether parameters use It.IsAny
     /// </summary>
-    private readonly Dictionary<string, (Delegate behavior, bool[] isAnyMatcher)> _setupInfo = [];
+    private readonly Dictionary<string, (Delegate behavior, bool[] isAnyMatcher, string signatureKey)> _setupInfo = [];
 
     private static readonly ConcurrentDictionary<Type, object> _anyMatchers = new();
 
@@ -63,7 +63,7 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         var anyMatcherBehavior = FindMatchingBehaviorWithIsAny(targetMethod!, args);
         if (anyMatcherBehavior != null)
         {
-            return anyMatcherBehavior.Method.GetParameters().Length == 0 ? 
+            return anyMatcherBehavior.Method.GetParameters().Length == 0 ?
                 anyMatcherBehavior.DynamicInvoke() :
                 anyMatcherBehavior.DynamicInvoke(args);
         }
@@ -82,7 +82,7 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
             var tArg = ret.GenericTypeArguments[0];
             return typeof(Task).GetMethod(nameof(Task.FromResult))!
                 .MakeGenericMethod(tArg)
-                .Invoke(null, new object?[] { GetDefault(tArg) });
+                .Invoke(null, [GetDefault(tArg)]);
         }
         if (ret == typeof(ValueTask)) return default(ValueTask);
         if (ret.IsGenericType && ret.GetGenericTypeDefinition() == typeof(ValueTask<>))
@@ -98,14 +98,14 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// </summary>
     private Delegate? FindMatchingBehaviorWithIsAny(MethodInfo method, object?[] args)
     {
+        var key = SignatureKey(method);
         // Check all setup information entries for this method looking for IsAny matches
         foreach (var kvp in _setupInfo)
         {
-            if (!kvp.Key.StartsWith(method.Name + "("))
-                continue;
-
-            var (behavior, isAnyMatcher) = kvp.Value;
+            var (behavior, isAnyMatcher, signatureKey) = kvp.Value;
             
+            if (!signatureKey.Equals(key))
+                continue;
             // Only check setups that have at least one IsAny
             if (!isAnyMatcher.Any(x => x))
                 continue;
@@ -118,39 +118,6 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Finds a matching behavior for the given method and arguments,
-    /// considering It.IsAny matchers in the setup.
-    /// </summary>
-    private Delegate? FindMatchingBehavior(MethodInfo method, object?[] args)
-    {
-        var methodParams = method.GetParameters();
-        Delegate? anyMatcherBehavior = null;
-        
-        // Check all setup information entries for this method
-        foreach (var kvp in _setupInfo)
-        {
-            if (!kvp.Key.StartsWith(method.Name + "("))
-                continue;
-
-            var (behavior, isAnyMatcher) = kvp.Value;
-            
-            // Check if this setup matches the current invocation
-            if (DoesSetupMatch(args, isAnyMatcher))
-            {
-                // If all parameters are specific (not IsAny), this is an exact match - return immediately
-                if (!isAnyMatcher.Any(x => x))
-                    return behavior;
-                
-                // If has IsAny matchers, save it as fallback
-                anyMatcherBehavior = behavior;
-            }
-        }
-
-        // Return the exact match if found, otherwise return the IsAny match
-        return anyMatcherBehavior;
     }
 
     /// <summary>
@@ -174,6 +141,7 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
             // The actual exact matching is done via the argument key comparison in _behaviors dictionary
         }
 
+
         return true;
     }
 
@@ -195,11 +163,12 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     public void Setup(MethodInfo method, object?[] args, Delegate behavior)
     {
         var argKey = CreateArgumentKey(method, args);
+        var signatureKey = SignatureKey(method);
         _behaviors[argKey] = behavior;
         
         // Store setup info to track which arguments are IsAny matchers
         var isAnyMatcher = args.Select(arg => IsAnyMatcherInstance(arg)).ToArray();
-        _setupInfo[argKey] = (behavior, isAnyMatcher);
+        _setupInfo[argKey] = (behavior, isAnyMatcher, signatureKey);
     }
 
     /// <summary>
@@ -264,12 +233,15 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
 
     private static string SignatureKey(MethodInfo mi)
     {
+        // take into account generic parameters
+        var genericPart = mi.IsGenericMethod ? $"<{string.Join(",", mi.GetGenericArguments().Select(ga => ga.FullName))}>" : "";
         var pars = string.Join(",", mi.GetParameters().Select(p => p.ParameterType.FullName));
-        return $"{mi.Name}({pars})";
+        return $"{mi.Name}({pars}){genericPart}";
     }
 
     private static string CreateArgumentKey(MethodInfo mi, object?[] args)
     {
+        var genericPart = mi.IsGenericMethod ? $"<{string.Join(",", mi.GetGenericArguments().Select(ga => ga.FullName))}>" : "";
         var pars = string.Join(",", mi.GetParameters().Select(p => p.ParameterType.FullName));
         var argValues = string.Join(",", args.Select(a => 
         {
@@ -278,7 +250,7 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
                 return "IsAny";
             return a?.ToString() ?? "null";
         }));
-        return $"{mi.Name}({pars})[{argValues}]";
+        return $"{mi.Name}({pars})[{argValues}]{genericPart}";
     }
 
     private static object? GetDefault(Type t) => t.IsValueType ? Activator.CreateInstance(t) : null;

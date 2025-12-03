@@ -623,4 +623,28 @@ public class MockCallbackTests
         Assert.Equal("Property 'Name' was set to 'Alice'", auditLog[1]);
         Assert.Equal("Property 'Name' was read", auditLog[2]);
     }
+
+    [Fact]
+    public void Test_Callback_ComplexArgumentMatching()
+    {
+        // Arrange
+
+        var builder = Mock.Create<ITestQueryService>()
+            .Setup(x => x.Get<IEnumerable<int>>(It.IsAny<string>()), () => [1, 2, 3])
+            .Setup(x => x.Get<IEnumerable<string>>(It.IsAny<string>()), () => ["one", "two", "three"]);
+
+        var mock = builder.Object;
+        // Act
+        var nums = mock.Get<IEnumerable<int>>("my-key-123");
+        var strs = mock.Get<IEnumerable<string>>("anotherkey");
+        // Assert
+      
+        Assert.Contains(2, nums);
+        Assert.Contains("three", strs);
+    }
+
+    private interface ITestQueryService
+    {
+        T Get<T>(string key);
+    }
 }
