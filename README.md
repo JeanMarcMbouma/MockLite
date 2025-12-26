@@ -203,11 +203,16 @@ using BbQ.MockLite;
 // Track method calls with custom logic using strongly-typed handlers
 var auditLog = new List<string>();
 var builder = Mock.Create<IUserRepository>()
+    // Traditional approach with object array
     .OnCall(x => x.GetUser(It.IsAny<string>()),
-        (string userId) => auditLog.Add($"GetUser called with: {userId}"))
+        args => auditLog.Add($"GetUser called with: {args[0]}"))
+    // Strongly-typed approach (new)
     .OnCall(x => x.SaveUser(It.IsAny<User>()),
-        args => args[0] is User u && u.IsAdmin,
-        args => auditLog.Add($"Admin user saved: {((User)args[0]).Name}"));
+        (User user) => auditLog.Add($"SaveUser called with: {user.Name}"))
+    // Conditional callback with matcher
+    .OnCall(x => x.DeleteUser(It.IsAny<string>()),
+        args => args[0] is string id && id.StartsWith("admin"),
+        args => auditLog.Add($"Admin user deleted: {args[0]}"));
 
 var mock = builder.Object;
 
