@@ -80,45 +80,95 @@ public sealed class Mock<T> where T : class
         return this;
     }
 
+    // --- Strongly-Typed Setup Methods (Compile-Time Parameter Matching) ---
+
     /// <summary>
-    /// Sets up a method that returns a delegate with strongly-typed handler.
+    /// Sets up a void method with compile-time enforced parameter matching.
     /// </summary>
-    /// <typeparam name="TDelegate">The delegate type returned by the method.</typeparam>
-    /// <param name="expression">A lambda expression identifying the method that returns a delegate.</param>
-    /// <param name="handler">A handler delegate that will be invoked when the returned delegate is called.</param>
-    /// <returns>The current builder instance for method chaining.</returns>
-    /// <remarks>
-    /// This overload enables compile-time type safety for delegate-returning methods.
-    /// The handler parameter type is automatically inferred and enforced to match the returned delegate type.
-    /// Works with any delegate type including Action, Action&lt;T&gt;, Func&lt;T&gt;, Func&lt;T, TResult&gt;, etc.
-    /// 
-    /// The setup matches invocations with the exact arguments specified in the expression.
-    /// Multiple setups can be configured for the same method with different arguments.
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // Action&lt;int, int&gt; example
-    /// builder.Setup(
-    ///     x => x.Query("proc", 1, 2),
-    ///     (int a, int b) => Console.WriteLine(a + b)
-    /// );
-    /// 
-    /// // Func&lt;string, int&gt; example
-    /// builder.Setup(
-    ///     x => x.GetTransform("key"),
-    ///     (string s) => s.Length
-    /// );
-    /// 
-    /// // Multiple setups with different arguments
-    /// builder
-    ///     .Setup(x => x.Query("proc1", 1, 2), (int a, int b) => ...)
-    ///     .Setup(x => x.Query("proc2", 3, 4), (int a, int b) => ...);
-    /// </code>
-    /// </example>
-    public Mock<T> Setup<TDelegate>(Expression<Func<T, TDelegate>> expression, TDelegate handler) where TDelegate : Delegate
+    public Mock<T> Setup(Expression<Action<T>> expression, Action handler)
     {
-        var (method, args) = ExtractMethod(expression);
-        _proxy.Setup(method, args, new Func<TDelegate>(() => handler));
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, new Func<object?>(() => { handler(); return null; }));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a void method with 1 parameter with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1>(Expression<Action<T, T1>> expression, Action<T1> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, new Func<T1, object?>((a1) => { handler(a1); return null; }));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a void method with 2 parameters with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1, T2>(Expression<Action<T, T1, T2>> expression, Action<T1, T2> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, new Func<T1, T2, object?>((a1, a2) => { handler(a1, a2); return null; }));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a void method with 3 parameters with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1, T2, T3>(Expression<Action<T, T1, T2, T3>> expression, Action<T1, T2, T3> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, new Func<T1, T2, T3, object?>((a1, a2, a3) => { handler(a1, a2, a3); return null; }));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a void method with 4 parameters with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1, T2, T3, T4>(Expression<Action<T, T1, T2, T3, T4>> expression, Action<T1, T2, T3, T4> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, new Func<T1, T2, T3, T4, object?>((a1, a2, a3, a4) => { handler(a1, a2, a3, a4); return null; }));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method with 1 parameter and return value with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1, TResult>(Expression<Func<T, T1, TResult>> expression, Func<T1, TResult> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, handler);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method with 2 parameters and return value with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1, T2, TResult>(Expression<Func<T, T1, T2, TResult>> expression, Func<T1, T2, TResult> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, handler);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method with 3 parameters and return value with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1, T2, T3, TResult>(Expression<Func<T, T1, T2, T3, TResult>> expression, Func<T1, T2, T3, TResult> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, handler);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method with 4 parameters and return value with compile-time enforced parameter matching.
+    /// </summary>
+    public Mock<T> Setup<T1, T2, T3, T4, TResult>(Expression<Func<T, T1, T2, T3, T4, TResult>> expression, Func<T1, T2, T3, T4, TResult> handler)
+    {
+        var method = ExtractMethodOnly(expression);
+        _proxy.Setup(method, handler);
         return this;
     }
 
@@ -371,6 +421,23 @@ public sealed class Mock<T> where T : class
         
         if (body is MethodCallExpression call)
             return (call.Method, call.Arguments.Select(a => (object?)Expression.Lambda(a).Compile().DynamicInvoke()).ToArray());
+        throw new ArgumentException("Expression must be a method call");
+    }
+
+    /// <summary>
+    /// Extracts the method information from an expression without evaluating arguments.
+    /// Used for strongly-typed setup where arguments are lambda parameters.
+    /// </summary>
+    private static MethodInfo ExtractMethodOnly(LambdaExpression expr)
+    {
+        var body = expr.Body;
+        
+        // Handle Convert expressions (e.g., when return type is boxed to object)
+        if (body is UnaryExpression unary && unary.NodeType == ExpressionType.Convert)
+            body = unary.Operand;
+        
+        if (body is MethodCallExpression call)
+            return call.Method;
         throw new ArgumentException("Expression must be a method call");
     }
 
