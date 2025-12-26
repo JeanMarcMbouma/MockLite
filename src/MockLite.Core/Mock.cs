@@ -100,13 +100,17 @@ public sealed class Mock<T> where T : class
     public Mock<T> Setup<TResult, T1>(Expression<Func<T, TResult>> expression, Func<T1, TResult> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        Func<TResult> behavior = () =>
+        var parameters = method.GetParameters();
+        
+        // Create a delegate that matches the method signature and extracts only the first parameter
+        Delegate behavior = parameters.Length switch
         {
-            var invocation = _proxy.Invocations.LastOrDefault(i => i.Method == method);
-            if (invocation == null || invocation.Arguments.Length < 1)
-                return handler(default(T1)!);
-            return handler((T1)invocation.Arguments[0]);
+            1 => new Func<T1, TResult>(handler),
+            2 => new Func<T1, object?, TResult>((p1, p2) => handler(p1)),
+            3 => new Func<T1, object?, object?, TResult>((p1, p2, p3) => handler(p1)),
+            _ => new Func<TResult>(() => handler(default(T1)!))
         };
+        
         _proxy.Setup(method, args, behavior);
         return this;
     }
@@ -132,13 +136,16 @@ public sealed class Mock<T> where T : class
     public Mock<T> Setup<TResult, T1, T2>(Expression<Func<T, TResult>> expression, Func<T1, T2, TResult> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        Func<TResult> behavior = () =>
+        var parameters = method.GetParameters();
+        
+        // Create a delegate that matches the method signature and extracts only the first two parameters
+        Delegate behavior = parameters.Length switch
         {
-            var invocation = _proxy.Invocations.LastOrDefault(i => i.Method == method);
-            if (invocation == null || invocation.Arguments.Length < 2)
-                return handler(default(T1)!, default(T2)!);
-            return handler((T1)invocation.Arguments[0], (T2)invocation.Arguments[1]);
+            2 => new Func<T1, T2, TResult>(handler),
+            3 => new Func<T1, T2, object?, TResult>((p1, p2, p3) => handler(p1, p2)),
+            _ => new Func<TResult>(() => handler(default(T1)!, default(T2)!))
         };
+        
         _proxy.Setup(method, args, behavior);
         return this;
     }
@@ -165,13 +172,15 @@ public sealed class Mock<T> where T : class
     public Mock<T> Setup<TResult, T1, T2, T3>(Expression<Func<T, TResult>> expression, Func<T1, T2, T3, TResult> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        Func<TResult> behavior = () =>
+        var parameters = method.GetParameters();
+        
+        // Create a delegate that matches the method signature and extracts only the first three parameters
+        Delegate behavior = parameters.Length switch
         {
-            var invocation = _proxy.Invocations.LastOrDefault(i => i.Method == method);
-            if (invocation == null || invocation.Arguments.Length < 3)
-                return handler(default(T1)!, default(T2)!, default(T3)!);
-            return handler((T1)invocation.Arguments[0], (T2)invocation.Arguments[1], (T3)invocation.Arguments[2]);
+            3 => new Func<T1, T2, T3, TResult>(handler),
+            _ => new Func<TResult>(() => handler(default(T1)!, default(T2)!, default(T3)!))
         };
+        
         _proxy.Setup(method, args, behavior);
         return this;
     }
