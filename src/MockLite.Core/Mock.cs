@@ -91,6 +91,9 @@ public sealed class Mock<T> where T : class
     /// This overload enables compile-time type safety for delegate-returning methods.
     /// The handler parameter type is automatically inferred and enforced to match the returned delegate type.
     /// Works with any delegate type including Action, Action&lt;T&gt;, Func&lt;T&gt;, Func&lt;T, TResult&gt;, etc.
+    /// 
+    /// The setup matches invocations with the exact arguments specified in the expression.
+    /// Multiple setups can be configured for the same method with different arguments.
     /// </remarks>
     /// <example>
     /// <code>
@@ -105,6 +108,11 @@ public sealed class Mock<T> where T : class
     ///     x => x.GetTransform("key"),
     ///     (string s) => s.Length
     /// );
+    /// 
+    /// // Multiple setups with different arguments
+    /// builder
+    ///     .Setup(x => x.Query("proc1", 1, 2), (int a, int b) => ...)
+    ///     .Setup(x => x.Query("proc2", 3, 4), (int a, int b) => ...);
     /// </code>
     /// </example>
     public Mock<T> Setup<TDelegate>(Expression<Func<T, TDelegate>> expression, TDelegate handler) where TDelegate : Delegate
