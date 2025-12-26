@@ -1,7 +1,7 @@
-# Strongly-Typed Setup Overloads
+# Strongly-Typed Setup Overloads for Action Delegates
 
 ## Overview
-This feature introduces 10 new `Setup` overloads that provide compile-time type safety for methods returning delegate types (Action and Func). The handler lambda is automatically type-checked against the delegate signature, eliminating runtime errors.
+This feature introduces 5 new `Setup` overloads that provide compile-time type safety for methods returning Action delegate types. The handler lambda is automatically type-checked against the delegate signature, eliminating runtime errors.
 
 ## Motivation
 When configuring behaviors for methods that return delegates, it's easy to make mistakes:
@@ -32,12 +32,8 @@ builder.Setup(
 - `Setup<T1, T2, T3>(Expression<Func<T, Action<T1, T2, T3>>>, Action<T1, T2, T3>)`
 - `Setup<T1, T2, T3, T4>(Expression<Func<T, Action<T1, T2, T3, T4>>>, Action<T1, T2, T3, T4>)`
 
-### Func Delegates (5 overloads)
-- `Setup<TResult>(Expression<Func<T, Func<TResult>>>, Func<TResult>)`
-- `Setup<T1, TResult>(Expression<Func<T, Func<T1, TResult>>>, Func<T1, TResult>)`
-- `Setup<T1, T2, TResult>(Expression<Func<T, Func<T1, T2, TResult>>>, Func<T1, T2, TResult>)`
-- `Setup<T1, T2, T3, TResult>(Expression<Func<T, Func<T1, T2, T3, TResult>>>, Func<T1, T2, T3, TResult>)`
-- `Setup<T1, T2, T3, T4, TResult>(Expression<Func<T, Func<T1, T2, T3, T4, TResult>>>, Func<T1, T2, T3, T4, TResult>)`
+### Note on Func Delegates
+Func delegates are not supported by these overloads as they would clash with the existing generic `Setup<TResult>` method. For methods returning Func delegates, use the existing `Setup<TResult>(Expression<Func<T, TResult>>, Func<TResult>)` method.
 
 ## Examples
 
@@ -61,26 +57,30 @@ action(10, 20); // Prints: Sum: 30
 ### Example 2: Func with parameters and return value
 ```csharp
 interface ICalculatorService {
-    Func<int, int, int> GetOperation(string operation);
+
+### Example 2: Action with single parameter
+```csharp
+interface INotificationService {
+    Action<string> SendNotification(string channel);
 }
 
-var builder = Mock.Create<ICalculatorService>();
+var builder = Mock.Create<INotificationService>();
 builder.Setup(
-    x => x.GetOperation("multiply"),
-    (int a, int b) => a * b
+    x => x.SendNotification("email"),
+    (string message) => Console.WriteLine($"Email: {message}")
 );
 
 var mock = builder.Object;
-var multiply = mock.GetOperation("multiply");
-var result = multiply(6, 7); // Returns: 42
+var notify = mock.SendNotification("email");
+notify("Hello World"); // Prints: Email: Hello World
 ```
 
 ### Example 3: Chaining multiple setups
 ```csharp
 var builder = Mock.Create<IService>()
     .Setup(x => x.GetAction(), () => Console.WriteLine("Action"))
-    .Setup(x => x.GetFunc(), () => 42)
-    .Setup(x => x.GetTransform(), (string s) => s.ToUpper());
+    .Setup(x => x.GetSingleParamAction(), (int x) => Console.WriteLine($"Value: {x}"))
+    .Setup(x => x.GetTwoParamAction(), (string s, bool b) => Console.WriteLine($"{s}: {b}"));
 ```
 
 ## Compile-Time Safety
@@ -111,15 +111,6 @@ builder.Setup(
 // Error: Cannot convert lambda with 1 parameter to Action<int, int>
 ```
 
-### ❌ Compile Error - Wrong Return Type
-```csharp
-builder.Setup(
-    x => x.GetTransform(),  // Returns Func<string, int>
-    (string s) => s.ToUpper()  // ERROR! Returns string, not int
-);
-// Error: Cannot convert lambda returning string to Func<string, int>
-```
-
 ## Benefits
 
 1. **Compile-Time Safety**: Type mismatches are caught at compile time, not runtime
@@ -148,23 +139,24 @@ events.Setup(
 );
 ```
 
-### Data Transformations
+### Logging Callbacks
 ```csharp
-var mapper = Mock.Create<IMapperService>();
-mapper.Setup(
-    x => x.GetTransform("uppercase"),
-    (string input) => input.ToUpper()
+var logger = Mock.Create<ILogService>();
+logger.Setup(
+    x => x.GetLogger("audit"),
+    (string message, string level) => Console.WriteLine($"[{level}] {message}")
 );
 ```
 
 ## Test Coverage
-- ✅ 13 unit tests covering all delegate arities
-- ✅ 4 integration tests demonstrating real-world scenarios
+- ✅ 5 unit tests covering all Action delegate arities (0-4 parameters)
+- ✅ 3 integration tests demonstrating real-world scenarios
 - ✅ Compile-time safety validation
-- ✅ All 163 tests passing
+- ✅ All tests passing
 
 ## Notes
-- Supports Action and Func delegates with 0-4 parameters
+- Supports Action delegates with 0-4 parameters
+- For Func delegates, use the existing generic `Setup<TResult>` method
 - For delegates with more than 4 parameters, use the existing Setup overload
 - Works with both generated mocks and runtime proxies
 - Fully compatible with existing MockLite features (verification, callbacks, etc.)

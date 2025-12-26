@@ -3,14 +3,14 @@ using BbQ.MockLite;
 namespace BbQ.MockLite.Demo;
 
 /// <summary>
-/// Demonstrates compile-time type safety with strongly-typed Setup overloads.
+/// Demonstrates compile-time type safety with strongly-typed Setup overloads for Action delegates.
 /// </summary>
 public class StronglyTypedSetupDemo
 {
     public interface IQueryService
     {
         Action<int, int> Query(string procedure, int param1, int param2);
-        Func<string, int> GetTransform(string name);
+        Action<string> LogMessage(string level);
     }
 
     public static void DemoCompileTimeSafety()
@@ -23,10 +23,10 @@ public class StronglyTypedSetupDemo
             (int a, int b) => Console.WriteLine($"Sum: {a + b}")
         );
 
-        // Example 2: Func<string, int> - compile-time enforced parameter and return types
+        // Example 2: Action<string> - compile-time enforced parameter type
         builder.Setup(
-            x => x.GetTransform("length"),
-            (string s) => s.Length
+            x => x.LogMessage("info"),
+            (string message) => Console.WriteLine($"Log: {message}")
         );
 
         var mock = builder.Object;
@@ -35,9 +35,8 @@ public class StronglyTypedSetupDemo
         var queryAction = mock.Query("proc", 1, 2);
         queryAction(10, 20); // Prints: Sum: 30
 
-        var transformFunc = mock.GetTransform("length");
-        var result = transformFunc("hello");
-        Console.WriteLine($"Length: {result}"); // Prints: Length: 5
+        var logAction = mock.LogMessage("info");
+        logAction("Operation completed"); // Prints: Log: Operation completed
 
         // The following would cause COMPILE-TIME errors:
         // builder.Setup(
@@ -46,8 +45,8 @@ public class StronglyTypedSetupDemo
         // );
         //
         // builder.Setup(
-        //     x => x.GetTransform("length"),
-        //     (int i) => i * 2  // ERROR: Wrong parameter type!
+        //     x => x.LogMessage("info"),
+        //     (int level) => Console.WriteLine(level)  // ERROR: Wrong parameter type!
         // );
     }
 }
