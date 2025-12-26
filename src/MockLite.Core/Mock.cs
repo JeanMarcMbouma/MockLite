@@ -80,6 +80,253 @@ public sealed class Mock<T> where T : class
         return this;
     }
 
+    // --- Strongly-Typed Delegate Setup Methods ---
+
+    /// <summary>
+    /// Sets up a method that returns an Action delegate with strongly-typed handler.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the method that returns an Action.</param>
+    /// <param name="handler">A handler action that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter type is enforced to match the returned Action delegate.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Setup(x => x.GetCallback(), () => Console.WriteLine("Called"));
+    /// </code>
+    /// </example>
+    public Mock<T> Setup(Expression<Func<T, Action>> expression, Action handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Action>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns an Action&lt;T1&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns an Action&lt;T1&gt;.</param>
+    /// <param name="handler">A handler action that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter types are enforced to match the returned Action&lt;T1&gt; delegate.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Setup(
+    ///     x => x.Query("proc", 1),
+    ///     (int a) => Console.WriteLine(a)
+    /// );
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<T1>(Expression<Func<T, Action<T1>>> expression, Action<T1> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Action<T1>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns an Action&lt;T1, T2&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns an Action&lt;T1, T2&gt;.</param>
+    /// <param name="handler">A handler action that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter types are enforced to match the returned Action&lt;T1, T2&gt; delegate.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Setup(
+    ///     x => x.Query("proc", 1, 2),
+    ///     (int a, int b) => Console.WriteLine(a + b)
+    /// );
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<T1, T2>(Expression<Func<T, Action<T1, T2>>> expression, Action<T1, T2> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Action<T1, T2>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns an Action&lt;T1, T2, T3&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="T3">The type of the third parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns an Action&lt;T1, T2, T3&gt;.</param>
+    /// <param name="handler">A handler action that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter types are enforced to match the returned Action&lt;T1, T2, T3&gt; delegate.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Setup(
+    ///     x => x.Query("proc", 1, 2, 3),
+    ///     (int a, int b, int c) => Console.WriteLine(a + b + c)
+    /// );
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<T1, T2, T3>(Expression<Func<T, Action<T1, T2, T3>>> expression, Action<T1, T2, T3> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Action<T1, T2, T3>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns an Action&lt;T1, T2, T3, T4&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="T3">The type of the third parameter.</typeparam>
+    /// <typeparam name="T4">The type of the fourth parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns an Action&lt;T1, T2, T3, T4&gt;.</param>
+    /// <param name="handler">A handler action that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter types are enforced to match the returned Action&lt;T1, T2, T3, T4&gt; delegate.
+    /// </remarks>
+    public Mock<T> Setup<T1, T2, T3, T4>(Expression<Func<T, Action<T1, T2, T3, T4>>> expression, Action<T1, T2, T3, T4> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Action<T1, T2, T3, T4>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns a Func&lt;TResult&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the Func delegate.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns a Func&lt;TResult&gt;.</param>
+    /// <param name="handler">A handler function that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler return type is enforced to match the returned Func&lt;TResult&gt; delegate.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Setup(x => x.GetFunc(), () => 42);
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<TResult>(Expression<Func<T, Func<TResult>>> expression, Func<TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Func<TResult>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns a Func&lt;T1, TResult&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="TResult">The return type of the Func delegate.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns a Func&lt;T1, TResult&gt;.</param>
+    /// <param name="handler">A handler function that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter and return types are enforced to match the returned Func&lt;T1, TResult&gt; delegate.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Setup(
+    ///     x => x.GetTransform("key"),
+    ///     (int value) => value * 2
+    /// );
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<T1, TResult>(Expression<Func<T, Func<T1, TResult>>> expression, Func<T1, TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Func<T1, TResult>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns a Func&lt;T1, T2, TResult&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="TResult">The return type of the Func delegate.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns a Func&lt;T1, T2, TResult&gt;.</param>
+    /// <param name="handler">A handler function that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter and return types are enforced to match the returned Func&lt;T1, T2, TResult&gt; delegate.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Setup(
+    ///     x => x.GetOperation("add"),
+    ///     (int a, int b) => a + b
+    /// );
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<T1, T2, TResult>(Expression<Func<T, Func<T1, T2, TResult>>> expression, Func<T1, T2, TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Func<T1, T2, TResult>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns a Func&lt;T1, T2, T3, TResult&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="T3">The type of the third parameter.</typeparam>
+    /// <typeparam name="TResult">The return type of the Func delegate.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns a Func&lt;T1, T2, T3, TResult&gt;.</param>
+    /// <param name="handler">A handler function that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter and return types are enforced to match the returned Func&lt;T1, T2, T3, TResult&gt; delegate.
+    /// </remarks>
+    public Mock<T> Setup<T1, T2, T3, TResult>(Expression<Func<T, Func<T1, T2, T3, TResult>>> expression, Func<T1, T2, T3, TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Func<T1, T2, T3, TResult>>(() => handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method that returns a Func&lt;T1, T2, T3, T4, TResult&gt; delegate with strongly-typed handler.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="T3">The type of the third parameter.</typeparam>
+    /// <typeparam name="T4">The type of the fourth parameter.</typeparam>
+    /// <typeparam name="TResult">The return type of the Func delegate.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method that returns a Func&lt;T1, T2, T3, T4, TResult&gt;.</param>
+    /// <param name="handler">A handler function that will be invoked when the delegate is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload enables compile-time type safety for delegate-returning methods.
+    /// The handler parameter and return types are enforced to match the returned Func&lt;T1, T2, T3, T4, TResult&gt; delegate.
+    /// </remarks>
+    public Mock<T> Setup<T1, T2, T3, T4, TResult>(Expression<Func<T, Func<T1, T2, T3, T4, TResult>>> expression, Func<T1, T2, T3, T4, TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<Func<T1, T2, T3, T4, TResult>>(() => handler));
+        return this;
+    }
+
     // --- Verification Methods ---
 
     /// <summary>
