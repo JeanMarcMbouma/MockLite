@@ -12,6 +12,7 @@ A lightweight, high-performance mocking framework for .NET that combines compile
 - 🎯 **Argument Matching** - Pattern matching for mock setup and verification
 - 🔍 **Verification** - Flexible verification with Times predicates (`Once`, `Never`, `Exactly`, `AtLeast`, `AtMost`)
 - 🔗 **Callbacks** - Execute custom logic when methods are called or properties are accessed
+- 💎 **Strongly-Typed Handlers** - Type-safe Setup and OnCall with partial parameter signatures
 - 🎓 **Easy API** - Simple, intuitive API inspired by popular mocking frameworks
 
 ## Getting Started
@@ -98,6 +99,9 @@ foreach (var invocation in builder.Invocations)
 
 **Setup Methods:**
 - `Setup<TResult>(expression, behavior)` - Configure method return values
+- `Setup<TResult, T1>(expression, handler)` - Configure with strongly-typed handler receiving first parameter
+- `Setup<TResult, T1, T2>(expression, handler)` - Configure with handler receiving first two parameters
+- `Setup<TResult, T1, T2, T3>(expression, handler)` - Configure with handler receiving first three parameters
 - `SetupGet<TProp>(property, getter)` - Setup property getter behavior
 - `ReturnsGet<TProp>(property, value)` - Convenience method for constant property values
 - `SetupSet<TProp>(property, setter)` - Setup property setter behavior
@@ -111,6 +115,10 @@ foreach (var invocation in builder.Invocations)
 
 **Callback Methods:**
 - `OnCall(expression, callback)` - Execute logic when method is called
+- `OnCall(expression, handler)` - Execute logic with no parameters when method is called
+- `OnCall<T1>(expression, handler)` - Execute logic with strongly-typed first parameter
+- `OnCall<T1, T2>(expression, handler)` - Execute logic with first two parameters
+- `OnCall<T1, T2, T3>(expression, handler)` - Execute logic with first three parameters
 - `OnCall(expression, matcher, callback)` - Execute logic when method is called with matching arguments
 - `OnPropertyAccess<T>(property, callback)` - Execute logic on property get or set
 - `OnGetCallback<T>(property, callback)` - Execute logic when property getter is accessed
@@ -121,6 +129,70 @@ foreach (var invocation in builder.Invocations)
 - `Object` - Get the mock instance
 - `Invocations` - Access all recorded invocations for custom verification
 
+## Strongly-Typed Callbacks with Partial Parameters
+
+BbQ.MockLite allows you to configure callbacks and return value handlers that receive only the parameters you care about, while maintaining full type safety.
+
+### Setup with Strongly-Typed Handlers
+
+Configure method return values using handlers that receive a subset of the method's parameters:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<IQueryService>();
+
+// Handler receives only the first parameter (type-safe)
+builder.Setup(x => x.Query("proc", 1, 2), 
+    (string proc) => $"Result: {proc}");
+
+// Handler receives first two parameters
+builder.Setup(x => x.Query("proc", 1, 2), 
+    (string proc, int id) => $"{proc}-{id}");
+
+// Handler receives all three parameters
+builder.Setup(x => x.Query("proc", 1, 2), 
+    (string proc, int id, int count) => $"{proc}:{id}:{count}");
+
+// Parameterless handler (doesn't need any parameters)
+builder.Setup(x => x.Query("proc", 1, 2), 
+    () => "Fixed result");
+```
+
+### OnCall with Strongly-Typed Handlers
+
+Execute custom logic using strongly-typed handlers that receive only the parameters you need:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<IUserRepository>();
+
+// Parameterless callback
+builder.OnCall(x => x.GetUser(It.IsAny<string>()), 
+    () => Console.WriteLine("GetUser called"));
+
+// Type-safe callback with first parameter
+builder.OnCall(x => x.GetUser(It.IsAny<string>()), 
+    (string userId) => Console.WriteLine($"Getting user: {userId}"));
+
+// Type-safe callback with multiple parameters
+builder.OnCall(x => x.UpdateUser(It.IsAny<string>(), It.IsAny<User>(), It.IsAny<bool>()), 
+    (string userId, User user) => 
+        Console.WriteLine($"Updating {userId} to {user.Name}"));
+
+// Works with void methods too
+builder.OnCall(x => x.DeleteUser(It.IsAny<string>(), It.IsAny<bool>()), 
+    (string userId) => Console.WriteLine($"Deleting: {userId}"));
+```
+
+### Benefits
+
+- **Type Safety**: Compile-time checking ensures parameter types match
+- **Clean Code**: Only handle the parameters you care about, ignore the rest
+- **IntelliSense Support**: Full IDE support with parameter names and types
+- **Flexible**: Works with methods that have any number of parameters
+
 ## Callbacks for Custom Logic Execution
 
 BbQ.MockLite supports callbacks that execute custom logic when methods are called or properties are accessed. This is useful for audit logging, state management, and complex verification scenarios.
@@ -128,11 +200,11 @@ BbQ.MockLite supports callbacks that execute custom logic when methods are calle
 ```csharp
 using BbQ.MockLite;
 
-// Track method calls with custom logic
+// Track method calls with custom logic using strongly-typed handlers
 var auditLog = new List<string>();
 var builder = Mock.Create<IUserRepository>()
     .OnCall(x => x.GetUser(It.IsAny<string>()),
-        args => auditLog.Add($"GetUser called with: {args[0]}"))
+        (string userId) => auditLog.Add($"GetUser called with: {userId}"))
     .OnCall(x => x.SaveUser(It.IsAny<User>()),
         args => args[0] is User u && u.IsAdmin,
         args => auditLog.Add($"Admin user saved: {((User)args[0]).Name}"));
@@ -152,13 +224,23 @@ Assert.Equal(2, auditLog.Count);
 **Track method calls:**
 ```csharp
 var callCount = 0;
+// Parameterless callback
 mock.OnCall(x => x.Process(It.IsAny<string>()), 
-    args => callCount++);
+    () => callCount++);
+```
+
+**Type-safe parameter access:**
+```csharp
+var processedItems = new List<string>();
+// Strongly-typed callback
+mock.OnCall(x => x.Process(It.IsAny<string>()), 
+    (string item) => processedItems.Add(item));
 ```
 
 **Conditional callbacks:**
 ```csharp
 var adminActions = new List<string>();
+// Mix of type-safe handlers and matchers
 mock.OnCall(
     x => x.Execute(It.IsAny<string>()),
     args => args[0] is string s && s.StartsWith("admin"),
