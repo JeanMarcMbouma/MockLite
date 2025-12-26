@@ -1,69 +1,32 @@
 using System;
+using System.Threading.Tasks;
 
 namespace BbQ.MockLite.Tests;
 
 /// <summary>
 /// Tests for the strongly-typed Setup overload using generic TDelegate parameter.
+/// Tests realistic scenarios with methods returning void, Task, Task&lt;T&gt;, or T.
+/// Validates that the compiler enforces argument types at compile time.
 /// </summary>
 public class StronglyTypedDelegateSetupTests
 {
-    [Fact]
-    public void Test_Setup_ActionWithTwoParams_CompileTimeSafe()
-    {
-        // Arrange
-        var builder = Mock.Create<IQueryService>();
-        var sum = 0;
-        
-        // Act - Setup with Action<int, int>
-        builder.Setup(
-            x => x.Query("proc", 1, 2),
-            (int a, int b) => sum = a + b
-        );
-
-        var mock = builder.Object;
-        var action = mock.Query("proc", 1, 2);
-        action(10, 20);
-
-        // Assert
-        Assert.Equal(30, sum);
-    }
+    // ==================== VOID-RETURNING DELEGATE TESTS ====================
 
     [Fact]
-    public void Test_Setup_ActionWithOneParam_CompileTimeSafe()
+    public void Test_Setup_VoidDelegate_NoArgs_CompilerEnforcesTypes()
     {
         // Arrange
-        var builder = Mock.Create<IQueryService>();
-        var receivedValue = 0;
-        
-        // Act - Setup with Action<int>
-        builder.Setup(
-            x => x.Log("info"),
-            (int value) => receivedValue = value
-        );
-
-        var mock = builder.Object;
-        var action = mock.Log("info");
-        action(42);
-
-        // Assert
-        Assert.Equal(42, receivedValue);
-    }
-
-    [Fact]
-    public void Test_Setup_ActionWithNoParams_CompileTimeSafe()
-    {
-        // Arrange
-        var builder = Mock.Create<IQueryService>();
+        var builder = Mock.Create<IDataService>();
         var called = false;
         
-        // Act - Setup with Action
+        // Act - Setup method returning Action (void, no args)
         builder.Setup(
-            x => x.GetCallback(),
+            x => x.GetLogAction("info"),
             () => called = true
         );
 
         var mock = builder.Object;
-        var action = mock.GetCallback();
+        var action = mock.GetLogAction("info");
         action();
 
         // Assert
@@ -71,282 +34,387 @@ public class StronglyTypedDelegateSetupTests
     }
 
     [Fact]
-    public void Test_Setup_FuncWithParams_CompileTimeSafe()
+    public void Test_Setup_VoidDelegate_WithArgs_CompilerEnforcesTypes()
     {
         // Arrange
-        var builder = Mock.Create<IQueryService>();
+        var builder = Mock.Create<IDataService>();
+        var receivedId = 0;
+        var receivedName = "";
         
-        // Act - Setup with Func<string, int>
+        // Act - Setup method returning Action<int, string> (void, with args)
         builder.Setup(
-            x => x.GetTransform("length"),
-            (string s) => s.Length
-        );
-
-        var mock = builder.Object;
-        var func = mock.GetTransform("length");
-        var result = func("hello");
-
-        // Assert
-        Assert.Equal(5, result);
-    }
-
-    [Fact]
-    public void Test_Setup_FuncWithNoParams_CompileTimeSafe()
-    {
-        // Arrange
-        var builder = Mock.Create<IQueryService>();
-        
-        // Act - Setup with Func<int>
-        builder.Setup(
-            x => x.GetValue(),
-            () => 42
-        );
-
-        var mock = builder.Object;
-        var func = mock.GetValue();
-        var result = func();
-
-        // Assert
-        Assert.Equal(42, result);
-    }
-
-    [Fact]
-    public void Test_Setup_FuncWithMultipleParams_CompileTimeSafe()
-    {
-        // Arrange
-        var builder = Mock.Create<IQueryService>();
-        
-        // Act - Setup with Func<int, int, int>
-        builder.Setup(
-            x => x.GetOperation("add"),
-            (int a, int b) => a + b
-        );
-
-        var mock = builder.Object;
-        var func = mock.GetOperation("add");
-        var result = func(10, 32);
-
-        // Assert
-        Assert.Equal(42, result);
-    }
-
-    // ==================== ARGUMENT MATCHING TESTS ====================
-
-    [Fact]
-    public void Test_Setup_WithSpecificArguments_OnlyMatchesExactArgs()
-    {
-        // Arrange
-        var builder = Mock.Create<IQueryService>();
-        var setupCalled = false;
-        
-        builder.Setup(
-            x => x.Query("specific", 1, 2),
-            (int a, int b) => setupCalled = true
-        );
-
-        var mock = builder.Object;
-        
-        // Act - Call with matching arguments
-        var action1 = mock.Query("specific", 1, 2);
-        Assert.NotNull(action1);
-        action1(10, 20);
-        
-        // Call with different arguments
-        var action2 = mock.Query("other", 1, 2);
-
-        // Assert
-        Assert.True(setupCalled);
-        Assert.Null(action2); // Different arguments should return null/default
-    }
-
-    [Fact]
-    public void Test_Setup_MultipleSetupsWithDifferentArgs_BothWork()
-    {
-        // Arrange
-        var builder = Mock.Create<IQueryService>();
-        var result1 = 0;
-        var result2 = 0;
-        
-        builder
-            .Setup(x => x.Query("proc1", 1, 2), (int a, int b) => result1 = a + b)
-            .Setup(x => x.Query("proc2", 3, 4), (int a, int b) => result2 = a * b);
-
-        var mock = builder.Object;
-        
-        // Act
-        var action1 = mock.Query("proc1", 1, 2);
-        action1(5, 10);
-        
-        var action2 = mock.Query("proc2", 3, 4);
-        action2(6, 7);
-
-        // Assert
-        Assert.Equal(15, result1);
-        Assert.Equal(42, result2);
-    }
-
-    [Fact]
-    public void Test_Setup_MethodChaining_WorksCorrectly()
-    {
-        // Arrange
-        var builder = Mock.Create<IQueryService>();
-        var called1 = false;
-        var called2 = false;
-        
-        // Act - Chain multiple setups
-        builder
-            .Setup(x => x.GetCallback(), () => called1 = true)
-            .Setup(x => x.Log("info"), (int value) => called2 = true);
-
-        var mock = builder.Object;
-        mock.GetCallback()();
-        mock.Log("info")(42);
-
-        // Assert
-        Assert.True(called1);
-        Assert.True(called2);
-    }
-
-    // ==================== CUSTOM DELEGATE TESTS ====================
-
-    [Fact]
-    public void Test_Setup_CustomDelegateType_WorksCorrectly()
-    {
-        // Arrange
-        var builder = Mock.Create<ICustomDelegateService>();
-        var receivedMessage = "";
-        var receivedCode = 0;
-        
-        builder.Setup(
-            x => x.GetHandler("error"),
-            (string message, int code) => 
+            x => x.GetUpdateAction("users"),
+            (int id, string name) =>
             {
-                receivedMessage = message;
-                receivedCode = code;
+                receivedId = id;
+                receivedName = name;
             }
         );
 
         var mock = builder.Object;
-        
-        // Act
-        var handler = mock.GetHandler("error");
-        handler("Test error", 500);
+        var action = mock.GetUpdateAction("users");
+        action(42, "John");
 
         // Assert
-        Assert.Equal("Test error", receivedMessage);
-        Assert.Equal(500, receivedCode);
+        Assert.Equal(42, receivedId);
+        Assert.Equal("John", receivedName);
     }
 
-    // ==================== PARAMS ARRAY AND ASYNC TESTS ====================
+    // ==================== TASK-RETURNING DELEGATE TESTS ====================
 
     [Fact]
-    public async Task Test_Setup_AsyncFunc_WithTwoArgs()
+    public async Task Test_Setup_TaskDelegate_NoArgs_CompilerEnforcesTypes()
     {
         // Arrange
-        var builder = Mock.Create<IAsyncQueryService>();
-        var callCount = 0;
+        var builder = Mock.Create<IDataService>();
+        var called = false;
         
+        // Act - Setup method returning Func<Task> (async void, no args)
         builder.Setup(
-            x => x.GetQueryFunc("proc", 1, 2),
-            async (string proc, int a, int b) =>
+            x => x.GetAsyncOperation("refresh"),
+            async () =>
             {
-                callCount++;
+                called = true;
+                await Task.CompletedTask;
+            }
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetAsyncOperation("refresh");
+        await func();
+
+        // Assert
+        Assert.True(called);
+    }
+
+    [Fact]
+    public async Task Test_Setup_TaskDelegate_WithTwoArgs_CompilerEnforcesTypes()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        var receivedProc = "";
+        var receivedValue = 0;
+        
+        // Act - Setup method returning Func<string, int, Task> (async void, with args)
+        builder.Setup(
+            x => x.GetQueryTask("execute"),
+            async (string proc, int value) =>
+            {
+                receivedProc = proc;
+                receivedValue = value;
+                await Task.CompletedTask;
+            }
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetQueryTask("execute");
+        await func("sproc", 100);
+
+        // Assert
+        Assert.Equal("sproc", receivedProc);
+        Assert.Equal(100, receivedValue);
+    }
+
+    [Fact]
+    public async Task Test_Setup_TaskDelegate_WithThreeArgs_CompilerEnforcesTypes()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        var sum = 0;
+        
+        // Act - Setup method returning Func<int, int, int, Task>
+        builder.Setup(
+            x => x.GetAsyncCalculation("sum"),
+            async (int a, int b, int c) =>
+            {
+                sum = a + b + c;
+                await Task.CompletedTask;
+            }
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetAsyncCalculation("sum");
+        await func(10, 20, 30);
+
+        // Assert
+        Assert.Equal(60, sum);
+    }
+
+    [Fact]
+    public async Task Test_Setup_TaskDelegate_WithFourArgs_CompilerEnforcesTypes()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        var result = "";
+        
+        // Act - Setup method returning Func<string, int, bool, double, Task>
+        builder.Setup(
+            x => x.GetComplexTask("process"),
+            async (string name, int count, bool flag, double value) =>
+            {
+                result = $"{name}:{count}:{flag}:{value}";
+                await Task.CompletedTask;
+            }
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetComplexTask("process");
+        await func("test", 42, true, 3.14);
+
+        // Assert
+        Assert.Equal("test:42:True:3.14", result);
+    }
+
+    // ==================== TASK<T>-RETURNING DELEGATE TESTS ====================
+
+    [Fact]
+    public async Task Test_Setup_TaskTDelegate_NoArgs_CompilerEnforcesTypes()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        // Act - Setup method returning Func<Task<int>> (async int, no args)
+        builder.Setup(
+            x => x.GetValueFactory("count"),
+            async () =>
+            {
+                await Task.CompletedTask;
+                return 42;
+            }
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetValueFactory("count");
+        var result = await func();
+
+        // Assert
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public async Task Test_Setup_TaskTDelegate_WithTwoArgs_CompilerEnforcesTypes()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        // Act - Setup method returning Func<int, int, Task<int>>
+        builder.Setup(
+            x => x.GetAsyncAdder("add"),
+            async (int a, int b) =>
+            {
                 await Task.CompletedTask;
                 return a + b;
             }
         );
 
         var mock = builder.Object;
-        
-        // Act
-        var func = mock.GetQueryFunc("proc", 1, 2);
-        var result = await func("proc", 10, 20);
+        var func = mock.GetAsyncAdder("add");
+        var result = await func(15, 27);
 
         // Assert
-        Assert.Equal(1, callCount);
-        Assert.Equal(30, result);
+        Assert.Equal(42, result);
     }
 
     [Fact]
-    public async Task Test_Setup_AsyncFunc_WithThreeArgs()
+    public async Task Test_Setup_TaskTDelegate_WithThreeArgs_CompilerEnforcesTypes()
     {
         // Arrange
-        var builder = Mock.Create<IAsyncQueryService>();
-        var callCount = 0;
+        var builder = Mock.Create<IDataService>();
         
+        // Act - Setup method returning Func<string, int, int, Task<string>>
         builder.Setup(
-            x => x.GetQueryFuncThreeArgs("proc", 1, 2, 3),
-            async (string proc, int a, int b, int c) =>
+            x => x.GetFormatter("format"),
+            async (string template, int value1, int value2) =>
             {
-                callCount++;
                 await Task.CompletedTask;
-                return a + b + c;
+                return $"{template}:{value1}+{value2}={value1 + value2}";
             }
         );
 
         var mock = builder.Object;
-        
-        // Act
-        var func = mock.GetQueryFuncThreeArgs("proc", 1, 2, 3);
-        var result = await func("proc", 10, 20, 30);
+        var func = mock.GetFormatter("format");
+        var result = await func("Result", 10, 32);
 
         // Assert
-        Assert.Equal(1, callCount);
-        Assert.Equal(60, result);
+        Assert.Equal("Result:10+32=42", result);
     }
 
     [Fact]
-    public async Task Test_Setup_AsyncFunc_WithFourArgs()
+    public async Task Test_Setup_TaskTDelegate_WithFourArgs_CompilerEnforcesTypes()
     {
         // Arrange
-        var builder = Mock.Create<IAsyncQueryService>();
-        var receivedArgs = new List<int>();
+        var builder = Mock.Create<IDataService>();
         
+        // Act - Setup method returning Func<int, int, int, int, Task<int>>
         builder.Setup(
-            x => x.GetComplexFunc("test"),
-            async (string proc, int a, int b, int c, int d) =>
+            x => x.GetComplexCalculator("calculate"),
+            async (int a, int b, int c, int d) =>
             {
-                receivedArgs.AddRange(new[] { a, b, c, d });
                 await Task.CompletedTask;
-                return a + b + c + d;
+                return (a + b) * (c + d);
             }
         );
 
         var mock = builder.Object;
-        
-        // Act
-        var func = mock.GetComplexFunc("test");
-        var result = await func("test", 1, 2, 3, 4);
+        var func = mock.GetComplexCalculator("calculate");
+        var result = await func(2, 4, 3, 4);
 
         // Assert
-        Assert.Equal(4, receivedArgs.Count);
-        Assert.Equal(10, result);
-        Assert.Equal(new[] { 1, 2, 3, 4 }, receivedArgs);
+        Assert.Equal(42, result); // (2+4) * (3+4) = 6 * 7 = 42
     }
 
-    // ==================== TEST INTERFACES ====================
+    // ==================== T-RETURNING DELEGATE TESTS ====================
 
-    private interface IQueryService
+    [Fact]
+    public void Test_Setup_TDelegate_NoArgs_CompilerEnforcesTypes()
     {
-        Action<int, int> Query(string procedure, int param1, int param2);
-        Action<int> Log(string level);
-        Action GetCallback();
-        Func<string, int> GetTransform(string name);
-        Func<int> GetValue();
-        Func<int, int, int> GetOperation(string operation);
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        // Act - Setup method returning Func<string> (returning T, no args)
+        builder.Setup(
+            x => x.GetStringFactory("hello"),
+            () => "Hello, World!"
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetStringFactory("hello");
+        var result = func();
+
+        // Assert
+        Assert.Equal("Hello, World!", result);
     }
 
-    private delegate void CustomHandler(string message, int code);
-
-    private interface ICustomDelegateService
+    [Fact]
+    public void Test_Setup_TDelegate_WithTwoArgs_CompilerEnforcesTypes()
     {
-        CustomHandler GetHandler(string type);
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        // Act - Setup method returning Func<string, int, string>
+        builder.Setup(
+            x => x.GetStringFormatter("concat"),
+            (string prefix, int number) => $"{prefix}-{number}"
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetStringFormatter("concat");
+        var result = func("ID", 42);
+
+        // Assert
+        Assert.Equal("ID-42", result);
     }
 
-    private interface IAsyncQueryService
+    [Fact]
+    public void Test_Setup_TDelegate_WithThreeArgs_CompilerEnforcesTypes()
     {
-        Func<string, int, int, Task<int>> GetQueryFunc(string proc, int p1, int p2);
-        Func<string, int, int, int, Task<int>> GetQueryFuncThreeArgs(string proc, int p1, int p2, int p3);
-        Func<string, int, int, int, int, Task<int>> GetComplexFunc(string proc);
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        // Act - Setup method returning Func<int, int, int, double>
+        builder.Setup(
+            x => x.GetAverageCalculator("avg"),
+            (int a, int b, int c) => (a + b + c) / 3.0
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetAverageCalculator("avg");
+        var result = func(10, 20, 30);
+
+        // Assert
+        Assert.Equal(20.0, result);
+    }
+
+    [Fact]
+    public void Test_Setup_TDelegate_WithFourArgs_CompilerEnforcesTypes()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        // Act - Setup method returning Func<bool, bool, bool, bool, int>
+        builder.Setup(
+            x => x.GetBooleanCounter("count"),
+            (bool a, bool b, bool c, bool d) => 
+                (a ? 1 : 0) + (b ? 1 : 0) + (c ? 1 : 0) + (d ? 1 : 0)
+        );
+
+        var mock = builder.Object;
+        var func = mock.GetBooleanCounter("count");
+        var result = func(true, false, true, true);
+
+        // Assert
+        Assert.Equal(3, result);
+    }
+
+    // ==================== ARGUMENT MATCHING AND CHAINING TESTS ====================
+
+    [Fact]
+    public void Test_Setup_MultipleSetups_WithDifferentArgs_BothWork()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        builder
+            .Setup(x => x.GetStringFactory("hello"), () => "Hello")
+            .Setup(x => x.GetStringFactory("goodbye"), () => "Goodbye");
+
+        var mock = builder.Object;
+        
+        // Act & Assert
+        Assert.Equal("Hello", mock.GetStringFactory("hello")());
+        Assert.Equal("Goodbye", mock.GetStringFactory("goodbye")());
+    }
+
+    [Fact]
+    public void Test_Setup_WithSpecificArgs_OnlyMatchesExactArgs()
+    {
+        // Arrange
+        var builder = Mock.Create<IDataService>();
+        
+        builder.Setup(
+            x => x.GetStringFactory("specific"),
+            () => "Matched"
+        );
+
+        var mock = builder.Object;
+        
+        // Act & Assert
+        Assert.Equal("Matched", mock.GetStringFactory("specific")());
+        Assert.Null(mock.GetStringFactory("other")); // Different args return null
+    }
+
+    // ==================== TEST INTERFACE ====================
+
+    /// <summary>
+    /// Realistic data service interface representing common real-world patterns.
+    /// Methods return delegates for various operations with different return types:
+    /// - void (Action)
+    /// - Task (async void)
+    /// - Task&lt;T&gt; (async with result)
+    /// - T (sync with result)
+    /// </summary>
+    private interface IDataService
+    {
+        // Void-returning delegates
+        Action GetLogAction(string level);
+        Action<int, string> GetUpdateAction(string table);
+        
+        // Task-returning delegates (async void)
+        Func<Task> GetAsyncOperation(string operation);
+        Func<string, int, Task> GetQueryTask(string type);
+        Func<int, int, int, Task> GetAsyncCalculation(string operation);
+        Func<string, int, bool, double, Task> GetComplexTask(string name);
+        
+        // Task<T>-returning delegates (async with result)
+        Func<Task<int>> GetValueFactory(string name);
+        Func<int, int, Task<int>> GetAsyncAdder(string operation);
+        Func<string, int, int, Task<string>> GetFormatter(string template);
+        Func<int, int, int, int, Task<int>> GetComplexCalculator(string operation);
+        
+        // T-returning delegates (sync with result)
+        Func<string> GetStringFactory(string type);
+        Func<string, int, string> GetStringFormatter(string operation);
+        Func<int, int, int, double> GetAverageCalculator(string operation);
+        Func<bool, bool, bool, bool, int> GetBooleanCounter(string operation);
     }
 }
