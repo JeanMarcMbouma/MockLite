@@ -501,6 +501,130 @@ public class StronglyTypedCallbackTests
         Assert.True(capturedFlag);
     }
 
+    // ==================== ERROR HANDLING TESTS ====================
+
+    [Fact]
+    public void Test_Setup_ThrowsWhenMethodHasFewerParametersThanHandler()
+    {
+        // Arrange & Act & Assert - trying to use 3-param handler on 2-param method
+        var mock = Mock.Create<ITwoParamService>();
+        var exception = Assert.Throws<ArgumentException>(() =>
+            mock.Setup(x => x.Calculate("a", 1), 
+                (string a, int b, string c) => "result"));
+        
+        Assert.Contains("has 2 parameter(s)", exception.Message);
+        Assert.Contains("expects 3 parameter(s)", exception.Message);
+    }
+
+    [Fact]
+    public void Test_Setup_ThrowsWhenParameterTypeMismatch()
+    {
+        // Arrange & Act & Assert
+        var mock = Mock.Create<IQueryService>();
+        var exception = Assert.Throws<ArgumentException>(() =>
+            mock.Setup(x => x.Query("proc", 1, 2), 
+                (int wrongType) => "result")); // First param is string, not int
+        
+        Assert.Contains("type mismatch", exception.Message.ToLower());
+    }
+
+    [Fact]
+    public void Test_OnCall_ThrowsWhenMethodHasFewerParametersThanHandler()
+    {
+        // Arrange & Act & Assert - trying to use 3-param handler on 2-param method
+        var mock = Mock.Create<ITwoParamService>();
+        var exception = Assert.Throws<ArgumentException>(() =>
+            mock.OnCall(x => x.Calculate("a", 1), 
+                (string a, int b, string c) => { }));
+        
+        Assert.Contains("has 2 parameter(s)", exception.Message);
+        Assert.Contains("expects 3 parameter(s)", exception.Message);
+    }
+
+    [Fact]
+    public void Test_OnCall_ThrowsWhenParameterTypeMismatch()
+    {
+        // Arrange & Act & Assert
+        var mock = Mock.Create<IQueryService>();
+        var exception = Assert.Throws<ArgumentException>(() =>
+            mock.OnCall(x => x.Query("proc", 1, 2), 
+                (int wrongType) => { })); // First param is string, not int
+        
+        Assert.Contains("type mismatch", exception.Message.ToLower());
+    }
+
+    [Fact]
+    public void Test_OnCall_VoidMethod_ThrowsWhenMethodHasFewerParametersThanHandler()
+    {
+        // Arrange & Act & Assert - trying to use 3-param handler on 2-param method
+        var mock = Mock.Create<ITwoParamVoidService>();
+        var exception = Assert.Throws<ArgumentException>(() =>
+            mock.OnCall(x => x.Execute("a", 1), 
+                (string a, int b, string c) => { }));
+        
+        Assert.Contains("has 2 parameter(s)", exception.Message);
+        Assert.Contains("expects 3 parameter(s)", exception.Message);
+    }
+
+    [Fact]
+    public void Test_OnCall_VoidMethod_ThrowsWhenParameterTypeMismatch()
+    {
+        // Arrange & Act & Assert
+        var mock = Mock.Create<ITestService>();
+        var exception = Assert.Throws<ArgumentException>(() =>
+            mock.OnCall(x => x.Process("data", 1, 2), 
+                (int wrongType) => { })); // First param is string, not int
+        
+        Assert.Contains("type mismatch", exception.Message.ToLower());
+    }
+
+    [Fact]
+    public void Test_Setup_WorksWithMethodsHavingMoreThan3Parameters()
+    {
+        // Arrange - use It.IsAny to match any arguments
+        var mock = Mock.Create<IExtendedService>()
+            .Setup(x => x.Process(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<double>(), It.IsAny<string>()), 
+                (string a, int b, bool c) => $"{a}-{b}-{c}");
+
+        // Act
+        var result = mock.Object.Process("test", 42, false, 3.14, "ignored");
+
+        // Assert
+        Assert.Equal("test-42-False", result);
+    }
+
+    [Fact]
+    public void Test_OnCall_WorksWithMethodsHavingMoreThan3Parameters()
+    {
+        // Arrange
+        var captured = new List<string>();
+        var mock = Mock.Create<IExtendedService>()
+            .OnCall(x => x.Process(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<double>(), It.IsAny<string>()), 
+                (string a, int b, bool c) => captured.Add($"{a}-{b}-{c}"));
+
+        // Act
+        mock.Object.Process("test", 42, false, 3.14, "ignored");
+
+        // Assert
+        Assert.Single(captured);
+        Assert.Equal("test-42-False", captured[0]);
+    }
+
+    [Fact]
+    public void Test_Setup_ValidatesTypeCompatibility()
+    {
+        // This should work because handler types are compatible - use It.IsAny
+        var mock = Mock.Create<IExtendedService>()
+            .Setup(x => x.ProcessWithBase(It.IsAny<BaseClass>(), It.IsAny<int>()), 
+                (BaseClass baseObj) => $"Base: {baseObj?.GetType().Name}");
+
+        // Act
+        var result = mock.Object.ProcessWithBase(new DerivedClass(), 42);
+
+        // Assert
+        Assert.Contains("DerivedClass", result);
+    }
+
     // Test interfaces
     private interface IQueryService
     {
@@ -516,4 +640,23 @@ public class StronglyTypedCallbackTests
     {
         int Compute(string name, int value, bool flag);
     }
+
+    private interface ITwoParamService
+    {
+        string Calculate(string a, int b);
+    }
+
+    private interface ITwoParamVoidService
+    {
+        void Execute(string a, int b);
+    }
+
+    private interface IExtendedService
+    {
+        string Process(string a, int b, bool c, double d, string e);
+        string ProcessWithBase(BaseClass obj, int id);
+    }
+
+    private class BaseClass { }
+    private class DerivedClass : BaseClass { }
 }
