@@ -80,6 +80,102 @@ public sealed class Mock<T> where T : class
         return this;
     }
 
+    /// <summary>
+    /// Sets up a method with a handler that receives the first parameter.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the method.</typeparam>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="handler">A function that receives the first parameter and returns the desired value.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The handler receives the first parameter of the method being intercepted.
+    /// This enables expressive, type-safe interception without needing to handle all parameters.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.Setup(x => x.Query("proc", 1, 2), (string proc) => GetResult(proc));
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<TResult, T1>(Expression<Func<T, TResult>> expression, Func<T1, TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        Func<TResult> behavior = () =>
+        {
+            var invocation = _proxy.Invocations.LastOrDefault(i => i.Method == method);
+            if (invocation == null || invocation.Arguments.Length < 1)
+                return handler(default(T1)!);
+            return handler((T1)invocation.Arguments[0]);
+        };
+        _proxy.Setup(method, args, behavior);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method with a handler that receives the first two parameters.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the method.</typeparam>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="handler">A function that receives the first two parameters and returns the desired value.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The handler receives the first two parameters of the method being intercepted.
+    /// This enables expressive, type-safe interception without needing to handle all parameters.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.Setup(x => x.Query("proc", 1, 2), (string proc, int id) => GetResult(proc, id));
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<TResult, T1, T2>(Expression<Func<T, TResult>> expression, Func<T1, T2, TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        Func<TResult> behavior = () =>
+        {
+            var invocation = _proxy.Invocations.LastOrDefault(i => i.Method == method);
+            if (invocation == null || invocation.Arguments.Length < 2)
+                return handler(default(T1)!, default(T2)!);
+            return handler((T1)invocation.Arguments[0], (T2)invocation.Arguments[1]);
+        };
+        _proxy.Setup(method, args, behavior);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a method with a handler that receives the first three parameters.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the method.</typeparam>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="T3">The type of the third parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="handler">A function that receives the first three parameters and returns the desired value.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// The handler receives the first three parameters of the method being intercepted.
+    /// This enables expressive, type-safe interception without needing to handle all parameters.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.Setup(x => x.Query("proc", 1, 2, "extra"), (string proc, int id, int count) => GetResult(proc, id, count));
+    /// </code>
+    /// </example>
+    public Mock<T> Setup<TResult, T1, T2, T3>(Expression<Func<T, TResult>> expression, Func<T1, T2, T3, TResult> handler)
+    {
+        var (method, args) = ExtractMethod(expression);
+        Func<TResult> behavior = () =>
+        {
+            var invocation = _proxy.Invocations.LastOrDefault(i => i.Method == method);
+            if (invocation == null || invocation.Arguments.Length < 3)
+                return handler(default(T1)!, default(T2)!, default(T3)!);
+            return handler((T1)invocation.Arguments[0], (T2)invocation.Arguments[1], (T3)invocation.Arguments[2]);
+        };
+        _proxy.Setup(method, args, behavior);
+        return this;
+    }
+
     // --- Verification Methods ---
 
     /// <summary>
@@ -464,6 +560,220 @@ public sealed class Mock<T> where T : class
     {
         var method = ExtractVoidMethod(expression);
         _proxy.OnInvocation(method, matcher, callback);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback with no parameters when a method is called.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="handler">An action that executes when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a parameterless callback for methods.
+    /// The handler doesn't receive any parameters from the intercepted method.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Query("proc", 1, 2), () => Console.WriteLine("Called!"));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall(Expression<Func<T, object?>> expression, Action handler)
+    {
+        var (method, _) = ExtractMethod(expression);
+        _proxy.OnInvocation(method, _ => handler());
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that receives the first parameter when a method is called.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="handler">An action that receives the first parameter when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a strongly-typed callback that receives the first parameter.
+    /// The handler signature must match the prefix of the method's parameter list.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Query("proc", 1, 2), (string proc) => Console.WriteLine(proc));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall<T1>(Expression<Func<T, object?>> expression, Action<T1> handler)
+    {
+        var (method, _) = ExtractMethod(expression);
+        _proxy.OnInvocation(method, args =>
+        {
+            if (args.Length >= 1)
+                handler((T1)args[0]!);
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that receives the first two parameters when a method is called.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="handler">An action that receives the first two parameters when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a strongly-typed callback that receives the first two parameters.
+    /// The handler signature must match the prefix of the method's parameter list.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Query("proc", 1, 2), (string proc, int id) => Console.WriteLine($"{proc}: {id}"));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall<T1, T2>(Expression<Func<T, object?>> expression, Action<T1, T2> handler)
+    {
+        var (method, _) = ExtractMethod(expression);
+        _proxy.OnInvocation(method, args =>
+        {
+            if (args.Length >= 2)
+                handler((T1)args[0]!, (T2)args[1]!);
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that receives the first three parameters when a method is called.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="T3">The type of the third parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="handler">An action that receives the first three parameters when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a strongly-typed callback that receives the first three parameters.
+    /// The handler signature must match the prefix of the method's parameter list.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Query("proc", 1, 2, "extra"), (string proc, int id, int count) => 
+    ///     Console.WriteLine($"{proc}: {id}, {count}"));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall<T1, T2, T3>(Expression<Func<T, object?>> expression, Action<T1, T2, T3> handler)
+    {
+        var (method, _) = ExtractMethod(expression);
+        _proxy.OnInvocation(method, args =>
+        {
+            if (args.Length >= 3)
+                handler((T1)args[0]!, (T2)args[1]!, (T3)args[2]!);
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback with no parameters when a void method is called.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the void method to set up.</param>
+    /// <param name="handler">An action that executes when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a parameterless callback for void methods.
+    /// The handler doesn't receive any parameters from the intercepted method.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Process(1, 2), () => Console.WriteLine("Called!"));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall(Expression<Action<T>> expression, Action handler)
+    {
+        var method = ExtractVoidMethod(expression);
+        _proxy.OnInvocation(method, _ => handler());
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that receives the first parameter when a void method is called.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the void method to set up.</param>
+    /// <param name="handler">An action that receives the first parameter when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a strongly-typed callback that receives the first parameter.
+    /// The handler signature must match the prefix of the method's parameter list.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Process("data", 1, 2), (string data) => Console.WriteLine(data));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall<T1>(Expression<Action<T>> expression, Action<T1> handler)
+    {
+        var method = ExtractVoidMethod(expression);
+        _proxy.OnInvocation(method, args =>
+        {
+            if (args.Length >= 1)
+                handler((T1)args[0]!);
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that receives the first two parameters when a void method is called.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the void method to set up.</param>
+    /// <param name="handler">An action that receives the first two parameters when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a strongly-typed callback that receives the first two parameters.
+    /// The handler signature must match the prefix of the method's parameter list.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Process("data", 1, 2), (string data, int id) => Console.WriteLine($"{data}: {id}"));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall<T1, T2>(Expression<Action<T>> expression, Action<T1, T2> handler)
+    {
+        var method = ExtractVoidMethod(expression);
+        _proxy.OnInvocation(method, args =>
+        {
+            if (args.Length >= 2)
+                handler((T1)args[0]!, (T2)args[1]!);
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a callback that receives the first three parameters when a void method is called.
+    /// </summary>
+    /// <typeparam name="T1">The type of the first parameter.</typeparam>
+    /// <typeparam name="T2">The type of the second parameter.</typeparam>
+    /// <typeparam name="T3">The type of the third parameter.</typeparam>
+    /// <param name="expression">A lambda expression identifying the void method to set up.</param>
+    /// <param name="handler">An action that receives the first three parameters when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This overload allows registering a strongly-typed callback that receives the first three parameters.
+    /// The handler signature must match the prefix of the method's parameter list.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.OnCall(x => x.Process("data", 1, 2, "extra"), (string data, int id, int count) => 
+    ///     Console.WriteLine($"{data}: {id}, {count}"));
+    /// </code>
+    /// </example>
+    public Mock<T> OnCall<T1, T2, T3>(Expression<Action<T>> expression, Action<T1, T2, T3> handler)
+    {
+        var method = ExtractVoidMethod(expression);
+        _proxy.OnInvocation(method, args =>
+        {
+            if (args.Length >= 3)
+                handler((T1)args[0]!, (T2)args[1]!, (T3)args[2]!);
+        });
         return this;
     }
 
