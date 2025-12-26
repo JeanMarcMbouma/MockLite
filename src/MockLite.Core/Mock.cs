@@ -460,11 +460,12 @@ public sealed class Mock<T> where T : class
             var methodParamType = methodParams[i].ParameterType;
             var handlerParamType = handlerParamTypes[i];
             
-            if (!handlerParamType.IsAssignableFrom(methodParamType) && methodParamType != handlerParamType)
+            // The method parameter type must be assignable to the handler parameter type
+            if (!handlerParamType.IsAssignableFrom(methodParamType))
             {
                 throw new ArgumentException(
                     $"Parameter type mismatch at position {i}: method '{method.Name}' has parameter type '{methodParamType.Name}' " +
-                    $"but handler expects '{handlerParamType.Name}'.",
+                    $"which is not assignable to handler parameter type '{handlerParamType.Name}'.",
                     nameof(handler));
             }
         }
@@ -551,11 +552,12 @@ public sealed class Mock<T> where T : class
             var methodParamType = methodParams[i].ParameterType;
             var handlerParamType = handlerParamTypes[i];
             
-            if (!handlerParamType.IsAssignableFrom(methodParamType) && methodParamType != handlerParamType)
+            // The method parameter type must be assignable to the handler parameter type
+            if (!handlerParamType.IsAssignableFrom(methodParamType))
             {
                 throw new ArgumentException(
                     $"Parameter type mismatch at position {i}: method '{method.Name}' has parameter type '{methodParamType.Name}' " +
-                    $"but handler expects '{handlerParamType.Name}'.",
+                    $"which is not assignable to handler parameter type '{handlerParamType.Name}'.",
                     parameterName);
             }
         }
