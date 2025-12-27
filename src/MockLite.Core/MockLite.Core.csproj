@@ -6,7 +6,7 @@
     <PackageId>BbQ.MockLite</PackageId>
     <Title>BbQ.MockLite</Title>
     <Description>A lightweight, high-performance mocking framework for .NET that combines compile-time code generation with runtime flexibility. Enables optimized mock implementations at build time with fallback runtime proxies for dynamic scenarios.</Description>
-    <PackageVersion>1.0.0</PackageVersion>
+    <PackageVersion>1.0.6</PackageVersion>
     <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

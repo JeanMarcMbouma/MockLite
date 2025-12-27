@@ -6,7 +6,7 @@
     <PackageId>BbQ.MockLite.Generators</PackageId>
     <Title>BbQ.MockLite.Generators</Title>
     <Description>Source generator and analyzers for BbQ.MockLite - generates optimized mock implementations at compile time with diagnostic analyzers and code fix providers.</Description>
-    <PackageVersion>1.0.0</PackageVersion>
+    <PackageVersion>1.0.6</PackageVersion>
     <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
