@@ -899,7 +899,7 @@ public sealed class Mock<T> where T : class
         if (pi.GetMethod != null)
             _proxy.OnInvocation(pi.GetMethod, _ => callback());
         if (pi.SetMethod != null)
-            _proxy.OnInvocation(pi.SetMethod, args => callback((TProp)(args.FirstOrDefault() ?? default(TProp)!)));
+            _proxy.OnInvocation(pi.SetMethod, _ => callback());
         return this;
     }
 
