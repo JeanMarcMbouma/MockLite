@@ -29,10 +29,10 @@ public class MockCreationBenchmarks
 
     /// <summary>
     /// Creates a source-generated mock via the <c>Mock.Of&lt;T&gt;</c> factory.
-    /// Includes a one-time <see cref="Type.GetType"/> reflection lookup to discover
-    /// the generated class, then calls <see cref="Activator.CreateInstance"/>.
+    /// With the compile-time <see cref="MockTypeRegistry"/>, this is an O(1) dictionary lookup
+    /// followed by a delegate call — no <c>Type.GetType</c> or <c>Activator.CreateInstance</c>.
     /// </summary>
-    [Benchmark(Description = "Mock.Of (source-generated, factory)")]
+    [Benchmark(Description = "Mock.Of (source-generated, registry)")]
     public ICalculator Create_SourceGenerated_Factory() => Mock.Of<ICalculator>();
 
     /// <summary>

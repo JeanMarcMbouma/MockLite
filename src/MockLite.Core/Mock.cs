@@ -1051,7 +1051,12 @@ public static class Mock
     /// </example>
     public static T Of<T>() where T : class
     {
-        // Try generated type MockXxx in same namespace
+        // Fast path: O(1) registry lookup populated by [ModuleInitializer] in each generated file.
+        if (MockTypeRegistry.TryCreate(typeof(T), out var registered))
+            return (T)registered!;
+
+        // Legacy fallback for assemblies compiled before the registry was introduced:
+        // reconstruct the conventional MockXxx name and use Type.GetType.
         var ifaceName = typeof(T).Name;
         var baseNs = typeof(T).Namespace;
         var mockName = ifaceName.Length > 1 && ifaceName[0] == 'I' && char.IsUpper(ifaceName[1])
@@ -1062,7 +1067,7 @@ public static class Mock
         var generated = Type.GetType(fullName);
         if (generated is not null) return (T)Activator.CreateInstance(generated)!;
 
-        // Fallback: DispatchProxy-based proxy for quick use
+        // Final fallback: DispatchProxy-based runtime proxy.
         return RuntimeProxy.Create<T>();
     }
 
