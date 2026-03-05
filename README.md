@@ -363,6 +363,46 @@ var mock = Mock.Of<IAsyncRepository>();
 - **BbQ.MockLite.Sample** - Comprehensive examples and usage patterns
 - **BbQ.MockLite.Tests** - Unit tests for core functionality
 - **BbQ.MockLite.Generators.Tests** - Unit tests for source generators
+- **BbQ.MockLite.Benchmarks** - BenchmarkDotNet performance comparisons
+
+## Benchmarks
+
+The `benchmarks/MockLite.Benchmarks` project uses [BenchmarkDotNet](https://benchmarkdotnet.org/) to compare
+source-generated mocks (`Mock.Of<T>` with `[GenerateMock]`) against runtime-proxy mocks (`Mock.Create<T>`).
+
+### Running the benchmarks
+
+```bash
+dotnet run --project benchmarks/MockLite.Benchmarks -c Release
+```
+
+To run a specific group only, use the `--filter` option:
+
+```bash
+# Creation benchmarks only
+dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Creation*'
+
+# Invocation benchmarks only
+dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Invocation*'
+```
+
+### What is measured
+
+| Benchmark group | Description |
+|---|---|
+| `MockCreationBenchmarks` | Time to instantiate a new mock object |
+| `MockInvocationBenchmarks` | Time to call a method on an already-created mock |
+| `MockSetupAndInvokeBenchmarks` | Time to configure a return value and call the method once |
+
+### Why source-generated mocks are faster
+
+`Mock.Of<T>` with `[GenerateMock]` produces a concrete class at **compile time** — its methods are regular
+C# virtual dispatch with no reflection. `Mock.Create<T>` wraps a `DispatchProxy` that intercepts every
+call at runtime through reflection, which adds measurable overhead for both creation and invocation.
+
+Use `[GenerateMock]` on interfaces you control for the best performance in hot test paths.
+Use `Mock.Create<T>` when you need the fluent Setup / Verify API for fine-grained test configuration,
+or for third-party interfaces where source generation is not available.
 
 ## Architecture
 
