@@ -21,12 +21,19 @@ public class MockCreationBenchmarks
     // ── Creation ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a source-generated mock instance via Mock.Of&lt;T&gt;.
-    /// The generator produces a lightweight MockCalculator class at compile time,
-    /// so this is equivalent to <c>new MockCalculator()</c>.
+    /// Directly instantiates the source-generated <see cref="MockCalculator"/> class.
+    /// Equivalent to writing <c>new MockCalculator()</c> by hand — no reflection involved.
     /// </summary>
-    [Benchmark(Description = "Mock.Of (source-generated)")]
-    public ICalculator Create_SourceGenerated() => Mock.Of<ICalculator>();
+    [Benchmark(Description = "new MockCalculator() (source-generated, direct)")]
+    public MockCalculator Create_SourceGenerated_Direct() => new MockCalculator();
+
+    /// <summary>
+    /// Creates a source-generated mock via the <c>Mock.Of&lt;T&gt;</c> factory.
+    /// Includes a one-time <see cref="Type.GetType"/> reflection lookup to discover
+    /// the generated class, then calls <see cref="Activator.CreateInstance"/>.
+    /// </summary>
+    [Benchmark(Description = "Mock.Of (source-generated, factory)")]
+    public ICalculator Create_SourceGenerated_Factory() => Mock.Of<ICalculator>();
 
     /// <summary>
     /// Creates a fluent-builder mock backed by a DispatchProxy runtime proxy.
@@ -44,14 +51,16 @@ public class MockCreationBenchmarks
 [SimpleJob]
 public class MockInvocationBenchmarks
 {
-    private ICalculator _generatedMock = null!;
+    private MockCalculator _generatedMock = null!;
     private Mock<ICalculator> _runtimeBuilder = null!;
     private ICalculator _runtimeMock = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
     {
-        _generatedMock = Mock.Of<ICalculator>();
+        // Use new MockCalculator() directly so the generated type is always used,
+        // regardless of the spawned process context BenchmarkDotNet creates.
+        _generatedMock = new MockCalculator();
         _runtimeBuilder = Mock.Create<ICalculator>();
         _runtimeMock = _runtimeBuilder.Object;
     }
@@ -75,14 +84,14 @@ public class MockSetupAndInvokeBenchmarks
 {
     /// <summary>
     /// Configures a return value on a source-generated mock and calls the method.
+    /// Uses <c>new MockCalculator()</c> directly so the generated type is always available.
     /// Generated mocks expose strongly-typed <c>SetupXxx</c> methods directly.
     /// </summary>
     [Benchmark(Description = "Setup + invoke – source-generated")]
     public int SetupAndInvoke_SourceGenerated()
     {
-        var mock = Mock.Of<ICalculator>();
-        // The source generator creates a SetupAdd method on MockCalculator.
-        ((MockCalculator)mock).SetupAdd((a, b) => a + b);
+        var mock = new MockCalculator();
+        mock.SetupAdd((a, b) => a + b);
         return mock.Add(3, 4);
     }
 
