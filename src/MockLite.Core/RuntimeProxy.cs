@@ -43,9 +43,6 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     // Cached default return values to avoid repeated Activator.CreateInstance calls.
     private static readonly ConcurrentDictionary<Type, object?> _defaultValues = new();
 
-    // Cached It.IsAny<T>() sentinel instances used to detect IsAny markers.
-    private static readonly ConcurrentDictionary<Type, object> _anyMatchers = new();
-
     /// <summary>
     /// Intercepts method calls on the proxied interface.
     /// </summary>
@@ -181,20 +178,11 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     }
 
     /// <summary>
-    /// Determines if an argument is an It.IsAny marker instance.
+    /// Determines if an argument is an <c>It.IsAny&lt;T&gt;()</c> marker.
+    /// Works by checking the runtime type of the boxed argument rather than comparing
+    /// the value (which is GC-sensitive for value types; see <see cref="Mock{T}.ExtractArgument"/>).
     /// </summary>
-    private static bool IsAnyMatcherInstance(object? arg)
-    {
-        if (arg == null) return false;
-
-        if (_anyMatchers.TryGetValue(arg.GetType(), out var cachedMatcher))
-            return object.Equals(arg, cachedMatcher);
-
-        var argType = arg.GetType();
-        var sentinel = typeof(It).GetMethod(nameof(It.IsAny))!.MakeGenericMethod(argType).Invoke(null, [])!;
-        _anyMatchers.TryAdd(argType, sentinel);
-        return object.Equals(arg, sentinel);
-    }
+    private static bool IsAnyMatcherInstance(object? arg) => arg is It.AnyMatcher;
 
     /// <summary>
     /// Returns the appropriate default value for <paramref name="t"/>, caching the

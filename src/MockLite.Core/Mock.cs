@@ -406,8 +406,34 @@ public sealed class Mock<T> where T : class
             body = unary.Operand;
         
         if (body is MethodCallExpression call)
-            return (call.Method, call.Arguments.Select(a => (object?)Expression.Lambda(a).Compile().DynamicInvoke()).ToArray());
+            return (call.Method, call.Arguments.Select(ExtractArgument).ToArray());
         throw new ArgumentException("Expression must be a method call");
+    }
+
+    /// <summary>
+    /// Evaluates a single argument expression, substituting <c>It.IsAny&lt;T&gt;()</c> calls
+    /// with <see cref="It.AnyMatcher.Instance"/> (a stable reference-type sentinel) rather
+    /// than evaluating the expression to its runtime value. This avoids the GC-sensitive
+    /// value comparison for value-type parameters: <c>Unsafe.As&lt;AnyMatcher, T&gt;</c>
+    /// returns bytes derived from the GC-managed pointer of <see cref="It.AnyMatcher.Instance"/>,
+    /// which changes on heap compaction, causing stale cached sentinels to produce false negatives
+    /// under concurrent test runs.
+    /// </summary>
+    private static object? ExtractArgument(Expression arg)
+    {
+        // Peek through any Convert nodes to detect the underlying expression.
+        var inner = arg;
+        while (inner is UnaryExpression u && u.NodeType == ExpressionType.Convert)
+            inner = u.Operand;
+
+        // Detect It.IsAny<T>() directly from the expression tree.
+        if (inner is MethodCallExpression mce &&
+            mce.Method.DeclaringType == typeof(It) &&
+            mce.Method.Name == nameof(It.IsAny) &&
+            mce.Arguments.Count == 0)
+            return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
+
+        return Expression.Lambda(arg).Compile().DynamicInvoke();
     }
 
     /// <summary>
