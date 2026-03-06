@@ -1,11 +1,9 @@
 ﻿// src/MockLite.Core/Core/Mock.cs
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.ComponentModel.DataAnnotations;
 using System.Collections.Concurrent;
 
 namespace BbQ.MockLite;
@@ -28,15 +26,24 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// </summary>
     public List<Invocation> Invocations { get; } = [];
 
-    private readonly Dictionary<string, Delegate> _behaviors = [];
+    // Comparer that uses RuntimeMethodHandle for reliable equality across MethodInfo instances
+    // that may originate from different reflection paths (expression trees vs DispatchProxy).
+    private static readonly MethodHandleComparer _handleComparer = new();
 
-    private readonly Dictionary<string, List<(Func<object?[], bool>? matcher, Action<object?[]> callback)>> _callbacks = [];
+    // Signature-only fallback behaviors keyed by MethodInfo (no arg matching).
+    private readonly Dictionary<MethodInfo, Func<object?[], object?>> _signatureBehaviors = new(_handleComparer);
 
-    /// <summary>
-    /// Stores setup information including whether parameters use It.IsAny
-    /// </summary>
-    private readonly Dictionary<string, (Delegate behavior, bool[] isAnyMatcher, string signatureKey)> _setupInfo = [];
+    // Arg-specific behaviors keyed by MethodInfo; each entry is an ordered list
+    // of (matchArgs, isAny flags, compiled invoker).  Later setups win (inserted at front).
+    private readonly Dictionary<MethodInfo, List<(object?[] MatchArgs, bool[] IsAny, Func<object?[], object?> Invoker)>> _argBehaviors = new(_handleComparer);
 
+    // Callbacks keyed by MethodInfo to avoid per-call string building.
+    private readonly Dictionary<MethodInfo, List<(Func<object?[], bool>? Matcher, Action<object?[]> Callback)>> _callbacks = new(_handleComparer);
+
+    // Cached default return values to avoid repeated Activator.CreateInstance calls.
+    private static readonly ConcurrentDictionary<Type, object?> _defaultValues = new();
+
+    // Cached It.IsAny<T>() sentinel instances used to detect IsAny markers.
     private static readonly ConcurrentDictionary<Type, object> _anyMatchers = new();
 
     /// <summary>
@@ -47,170 +54,66 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         args ??= [];
         Invocations.Add(new Invocation(targetMethod!, args!));
 
-        // Execute callbacks for this method
+        // Execute callbacks for this method.
         ExecuteCallbacks(targetMethod!, args);
 
-        // First, try exact argument matching (for setups without IsAny or with specific values)
-        var argKey = CreateArgumentKey(targetMethod!, args);
-        if (_behaviors.TryGetValue(argKey, out var behavior))
+        // Try arg-specific behaviors first (supports exact and IsAny matching).
+        if (_argBehaviors.TryGetValue(targetMethod!, out var argList))
         {
-            return behavior.Method.GetParameters().Length == 0 ? 
-                behavior.DynamicInvoke() :
-                behavior.DynamicInvoke(args);
-        }
-
-        // Then, try to find a behavior that matches with IsAny matchers
-        var anyMatcherBehavior = FindMatchingBehaviorWithIsAny(targetMethod!, args);
-        if (anyMatcherBehavior != null)
-        {
-            return anyMatcherBehavior.Method.GetParameters().Length == 0 ?
-                anyMatcherBehavior.DynamicInvoke() :
-                anyMatcherBehavior.DynamicInvoke(args);
-        }
-
-        // Fall back to method signature only (for setups without specific arguments)
-        var sigKey = SignatureKey(targetMethod!);
-        if (_behaviors.TryGetValue(sigKey, out var del))
-            return del.Method.GetParameters().Length == 0 ?
-                del.DynamicInvoke() : del.DynamicInvoke(args);
-
-        var ret = targetMethod!.ReturnType;
-        if (ret == typeof(void)) return null;
-        if (ret == typeof(Task)) return Task.CompletedTask;
-        if (ret.IsGenericType && ret.GetGenericTypeDefinition() == typeof(Task<>))
-        {
-            var tArg = ret.GenericTypeArguments[0];
-            return typeof(Task).GetMethod(nameof(Task.FromResult))!
-                .MakeGenericMethod(tArg)
-                .Invoke(null, [GetDefault(tArg)]);
-        }
-        if (ret == typeof(ValueTask)) return default(ValueTask);
-        if (ret.IsGenericType && ret.GetGenericTypeDefinition() == typeof(ValueTask<>))
-        {
-            var tArg = ret.GenericTypeArguments[0];
-            return Activator.CreateInstance(typeof(ValueTask<>).MakeGenericType(tArg), GetDefault(tArg));
-        }
-        return GetDefault(ret);
-    }
-
-    /// <summary>
-    /// Finds a matching behavior for the given method and arguments using IsAny matchers.
-    /// </summary>
-    private Delegate? FindMatchingBehaviorWithIsAny(MethodInfo method, object?[] args)
-    {
-        var key = SignatureKey(method);
-        // Check all setup information entries for this method looking for IsAny matches
-        foreach (var kvp in _setupInfo)
-        {
-            var (behavior, isAnyMatcher, signatureKey) = kvp.Value;
-            
-            if (!signatureKey.Equals(key))
-                continue;
-            // Only check setups that have at least one IsAny
-            if (!isAnyMatcher.Any(x => x))
-                continue;
-
-            // Check if this setup matches the current invocation
-            if (DoesSetupMatch(args, isAnyMatcher))
+            for (int i = 0; i < argList.Count; i++)
             {
-                return behavior;
+                var (matchArgs, isAny, invoker) = argList[i];
+                if (MatchesArguments(matchArgs, isAny, args))
+                    return invoker(args);
             }
         }
 
-        return null;
+        // Fall back to signature-only behavior.
+        if (_signatureBehaviors.TryGetValue(targetMethod!, out var sigInvoker))
+            return sigInvoker(args);
+
+        // Return the appropriate default for the method's return type.
+        return GetDefault(targetMethod!.ReturnType);
     }
 
     /// <summary>
-    /// Determines if a setup matches the current invocation arguments.
+    /// Sets up the behavior for a specific method (signature-only, no argument matching).
     /// </summary>
-    private static bool DoesSetupMatch(object?[] invocationArgs, bool[] isAnyMatcher)
-    {
-        // If the setup has different number of parameters than invocation, it doesn't match
-        if (isAnyMatcher.Length != invocationArgs.Length)
-            return false;
-
-        // For each parameter, check if it matches
-        for (int i = 0; i < isAnyMatcher.Length; i++)
-        {
-            // If this parameter was set up with It.IsAny, it matches anything
-            if (isAnyMatcher[i])
-                continue;
-
-            // Otherwise, we need to check if the values could match
-            // For now, we accept any non-null value as potentially matching an exact setup
-            // The actual exact matching is done via the argument key comparison in _behaviors dictionary
-        }
-
-
-        return true;
-    }
-
-    /// <summary>
-    /// Sets up the behavior for a specific method.
-    /// </summary>
-    /// <param name="method">The method to set up behavior for.</param>
-    /// <param name="behavior">The delegate that implements the method behavior.</param>
     public void Setup(MethodInfo method, Delegate behavior)
-        => _behaviors[SignatureKey(method)] = behavior;
+        => _signatureBehaviors[method] = CompileInvoker(behavior);
 
     /// <summary>
-    /// Sets up the behavior for a specific method with specific argument values.
-    /// This now supports It.IsAny matchers in the arguments.
+    /// Sets up the behavior for a specific method with argument matching (supports It.IsAny).
     /// </summary>
-    /// <param name="method">The method to set up behavior for.</param>
-    /// <param name="args">The specific argument values to match (may include It.IsAny markers).</param>
-    /// <param name="behavior">The delegate that implements the method behavior.</param>
     public void Setup(MethodInfo method, object?[] args, Delegate behavior)
     {
-        var argKey = CreateArgumentKey(method, args);
-        var signatureKey = SignatureKey(method);
-        _behaviors[argKey] = behavior;
-        
-        // Store setup info to track which arguments are IsAny matchers
-        var isAnyMatcher = args.Select(arg => IsAnyMatcherInstance(arg)).ToArray();
-        _setupInfo[argKey] = (behavior, isAnyMatcher, signatureKey);
-    }
+        var isAny = new bool[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            isAny[i] = IsAnyMatcherInstance(args[i]);
 
-    /// <summary>
-    /// Determines if an argument is an It.IsAny marker instance.
-    /// </summary>
-    private static bool IsAnyMatcherInstance(object? arg)
-    {
-        if (arg == null)
-            return false;
+        var invoker = CompileInvoker(behavior);
 
-        //generate a generic signature for Is.IsAny<T>
-        if(_anyMatchers.TryGetValue(arg.GetType(), out var cachedMatcher))
-        {
-            return object.Equals(arg, cachedMatcher);
-        }
-        var argType = arg.GetType();
-        var signature = typeof(It).GetMethod(nameof(It.IsAny))!.MakeGenericMethod(argType);
-        var expectedMatcher = signature.Invoke(null, [])!;
-        _anyMatchers.TryAdd(argType, expectedMatcher);
-        return object.Equals(arg, expectedMatcher);
+        if (!_argBehaviors.TryGetValue(method, out var list))
+            _argBehaviors[method] = list = [];
+
+        // Insert at the front so that the most recent setup takes priority.
+        list.Insert(0, (args, isAny, invoker));
     }
 
     /// <summary>
     /// Registers a callback that executes when a method is invoked.
     /// </summary>
-    /// <param name="method">The method to register the callback for.</param>
-    /// <param name="callback">The callback action to execute.</param>
     public void OnInvocation(MethodInfo method, Action<object?[]> callback)
         => OnInvocation(method, null, callback);
 
     /// <summary>
     /// Registers a callback that executes when a method is invoked with matching arguments.
     /// </summary>
-    /// <param name="method">The method to register the callback for.</param>
-    /// <param name="matcher">Optional predicate to match arguments.</param>
-    /// <param name="callback">The callback action to execute.</param>
     public void OnInvocation(MethodInfo method, Func<object?[], bool>? matcher, Action<object?[]> callback)
     {
-        var key = SignatureKey(method);
-        if (!_callbacks.ContainsKey(key))
-            _callbacks[key] = [];
-        _callbacks[key].Add((matcher, callback));
+        if (!_callbacks.TryGetValue(method, out var list))
+            _callbacks[method] = list = [];
+        list.Add((matcher, callback));
     }
 
     /// <summary>
@@ -218,42 +121,126 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// </summary>
     private void ExecuteCallbacks(MethodInfo method, object?[] args)
     {
-        var key = SignatureKey(method);
-        if (_callbacks.TryGetValue(key, out var callbackList))
+        if (_callbacks.TryGetValue(method, out var callbackList))
         {
             foreach (var (matcher, callback) in callbackList)
             {
                 if (matcher == null || matcher(args))
-                {
                     callback(args);
-                }
             }
         }
     }
 
-    private static string SignatureKey(MethodInfo mi)
+    /// <summary>
+    /// Checks whether the invocation arguments satisfy an arg-specific setup entry.
+    /// Parameters flagged as IsAny match any value; others are compared with Equals.
+    /// </summary>
+    private static bool MatchesArguments(object?[] matchArgs, bool[] isAny, object?[] invArgs)
     {
-        // take into account generic parameters
-        var genericPart = mi.IsGenericMethod ? $"<{string.Join(",", mi.GetGenericArguments().Select(ga => ga.FullName))}>" : "";
-        var pars = string.Join(",", mi.GetParameters().Select(p => p.ParameterType.FullName));
-        return $"{mi.Name}({pars}){genericPart}";
-    }
-
-    private static string CreateArgumentKey(MethodInfo mi, object?[] args)
-    {
-        var genericPart = mi.IsGenericMethod ? $"<{string.Join(",", mi.GetGenericArguments().Select(ga => ga.FullName))}>" : "";
-        var pars = string.Join(",", mi.GetParameters().Select(p => p.ParameterType.FullName));
-        var argValues = string.Join(",", args.Select(a => 
+        if (isAny.Length != invArgs.Length) return false;
+        for (int i = 0; i < isAny.Length; i++)
         {
-            // For AnyMatcher instances, use a special marker in the key
-            if (a != null && a.GetType().Name == "AnyMatcher")
-                return "IsAny";
-            return a?.ToString() ?? "null";
-        }));
-        return $"{mi.Name}({pars})[{argValues}]{genericPart}";
+            if (isAny[i]) continue;
+            if (!Equals(matchArgs[i], invArgs[i])) return false;
+        }
+        return true;
     }
 
-    private static object? GetDefault(Type t) => t.IsValueType ? Activator.CreateInstance(t) : null;
+    /// <summary>
+    /// Compiles a delegate into a <c>Func&lt;object?[], object?&gt;</c> that can be
+    /// invoked without reflection on the hot path.  The compilation cost is paid once
+    /// at Setup time rather than on every invocation.
+    /// </summary>
+    private static Func<object?[], object?> CompileInvoker(Delegate d)
+    {
+        // Use the delegate type's Invoke method to get the formal parameter list and
+        // return type. This is always correct regardless of how the delegate was created
+        // (regular method, compiled expression lambda, closures, etc.).
+        var invokeMethod = d.GetType().GetMethod("Invoke")!;
+        var parms = invokeMethod.GetParameters();
+        var returnType = invokeMethod.ReturnType;
+
+        var argsParam = Expression.Parameter(typeof(object?[]), "args");
+
+        Expression[] callArgs = parms.Length == 0
+            ? []
+            : new Expression[parms.Length];
+
+        for (int i = 0; i < parms.Length; i++)
+            callArgs[i] = Expression.Convert(
+                Expression.ArrayIndex(argsParam, Expression.Constant(i)),
+                parms[i].ParameterType);
+
+        var invoke = Expression.Invoke(Expression.Constant(d), callArgs);
+
+        Expression body = returnType == typeof(void)
+            ? Expression.Block(typeof(object), invoke, Expression.Constant(null, typeof(object)))
+            : Expression.Convert(invoke, typeof(object));
+
+        return Expression.Lambda<Func<object?[], object?>>(body, argsParam).Compile();
+    }
+
+    /// <summary>
+    /// Determines if an argument is an It.IsAny marker instance.
+    /// </summary>
+    private static bool IsAnyMatcherInstance(object? arg)
+    {
+        if (arg == null) return false;
+
+        if (_anyMatchers.TryGetValue(arg.GetType(), out var cachedMatcher))
+            return object.Equals(arg, cachedMatcher);
+
+        var argType = arg.GetType();
+        var sentinel = typeof(It).GetMethod(nameof(It.IsAny))!.MakeGenericMethod(argType).Invoke(null, [])!;
+        _anyMatchers.TryAdd(argType, sentinel);
+        return object.Equals(arg, sentinel);
+    }
+
+    /// <summary>
+    /// Returns the appropriate default value for <paramref name="t"/>, caching the
+    /// result so that <c>Activator.CreateInstance</c> is only called once per type.
+    /// </summary>
+    private static object? GetDefault(Type t)
+    {
+        return _defaultValues.GetOrAdd(t, static type =>
+        {
+            if (type == typeof(void)) return null;
+            if (type == typeof(Task)) return Task.CompletedTask;
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                var tArg = type.GenericTypeArguments[0];
+                return typeof(Task).GetMethod(nameof(Task.FromResult))!
+                    .MakeGenericMethod(tArg)
+                    .Invoke(null, [GetDefault(tArg)]);
+            }
+            if (type == typeof(ValueTask)) return (object?)default(ValueTask);
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>))
+            {
+                var tArg = type.GenericTypeArguments[0];
+                return Activator.CreateInstance(
+                    typeof(ValueTask<>).MakeGenericType(tArg),
+                    GetDefault(tArg));
+            }
+            return type.IsValueType ? Activator.CreateInstance(type) : null;
+        });
+    }
+
+    /// <summary>
+    /// Equality comparer for MethodInfo that uses RuntimeMethodHandle for reliable
+    /// identity comparison across MethodInfo instances that may originate from
+    /// different reflection paths (e.g. expression trees vs DispatchProxy).
+    /// </summary>
+    private sealed class MethodHandleComparer : IEqualityComparer<MethodInfo>
+    {
+        public bool Equals(MethodInfo? x, MethodInfo? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x == null || y == null) return false;
+            return x.MethodHandle == y.MethodHandle;
+        }
+
+        public int GetHashCode(MethodInfo m) => m.MethodHandle.GetHashCode();
+    }
 }
 
 /// <summary>

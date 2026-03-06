@@ -107,6 +107,10 @@ public class InterfaceMockGenerator : ISourceGenerator
             sb.AppendLine($"    public {delType}? {field} {{ get; set; }}");
         }
 
+        // Static cached MethodInfo fields for methods (avoids per-call GetMethod reflection).
+        foreach (var m in methods)
+            sb.Append(EmitMethodInfoField(m));
+
         // Property behavior fields
         foreach (var p in iface.GetMembers().OfType<IPropertySymbol>())
         {
@@ -115,6 +119,15 @@ public class InterfaceMockGenerator : ISourceGenerator
             if (p.SetMethod is not null)
                 sb.AppendLine($"    public Action<{TypeDisplay(p.Type)}>? {SetBehaviorFieldName(p)} {{ get; set; }}");
             sb.AppendLine($"    private {TypeDisplay(p.Type)}? _{p.Name};");
+        }
+
+        // Static cached MethodInfo fields for property accessors.
+        foreach (var p in iface.GetMembers().OfType<IPropertySymbol>())
+        {
+            if (p.GetMethod is not null)
+                sb.AppendLine($"    private static readonly MethodInfo {PropertyGetMethodInfoFieldName(p)} = typeof({TypeDisplay(p.ContainingType)}).GetProperty(\"{p.Name}\")!.GetGetMethod()!;");
+            if (p.SetMethod is not null)
+                sb.AppendLine($"    private static readonly MethodInfo {PropertySetMethodInfoFieldName(p)} = typeof({TypeDisplay(p.ContainingType)}).GetProperty(\"{p.Name}\")!.GetSetMethod()!;");
         }
 
         // Implement methods
@@ -237,15 +250,14 @@ public class InterfaceMockGenerator : ISourceGenerator
         var name = m.Name;
         var parmsSig = string.Join(", ", m.Parameters.Select(p => $"{TypeDisplay(p.Type)} {p.Name}"));
         var ret = TypeDisplay(m.ReturnType);
-        var iface = TypeDisplay(m.ContainingType);
         var argsArray = string.Join(", ", m.Parameters.Select(p => p.Name));
         var field = BehaviorFieldName(m);
+        var miField = MethodInfoFieldName(m);
         var sb = new StringBuilder();
 
         sb.AppendLine($"    public {ret} {name}({parmsSig})");
         sb.AppendLine("    {");
-        sb.AppendLine($"        var mi = typeof({iface}).GetMethod(\"{name}\")!;");
-        sb.AppendLine($"        Invocations.Add(new Invocation(mi, new object[] {{ {argsArray} }}));");
+        sb.AppendLine($"        Invocations.Add(new Invocation({miField}, new object[] {{ {argsArray} }}));");
 
         if (ret == "void")
         {
@@ -397,7 +409,6 @@ public class InterfaceMockGenerator : ISourceGenerator
     {
         var name = p.Name;
         var type = TypeDisplay(p.Type);
-        var iface = TypeDisplay(p.ContainingType);
         var sb = new StringBuilder();
 
         sb.AppendLine($"    public {type} {name}");
@@ -406,8 +417,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.AppendLine("        get");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var mi = typeof({iface}).GetProperty(\"{name}\")!.GetGetMethod()!;");
-            sb.AppendLine("            Invocations.Add(new Invocation(mi, Array.Empty<object>()));");
+            sb.AppendLine($"            Invocations.Add(new Invocation({PropertyGetMethodInfoFieldName(p)}, Array.Empty<object>()));");
             sb.AppendLine($"            if ({GetBehaviorFieldName(p)} is not null) return {GetBehaviorFieldName(p)}();");
             sb.AppendLine($"            return _{name}!;");
             sb.AppendLine("        }");
@@ -416,8 +426,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.AppendLine("        set");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var mi = typeof({iface}).GetProperty(\"{name}\")!.GetSetMethod()!;");
-            sb.AppendLine($"            Invocations.Add(new Invocation(mi, new object[] {{ value }}));");
+            sb.AppendLine($"            Invocations.Add(new Invocation({PropertySetMethodInfoFieldName(p)}, new object[] {{ value }}));");
             sb.AppendLine($"            if ({SetBehaviorFieldName(p)} is not null) {{ {SetBehaviorFieldName(p)}(value); }} else _{name} = value;");
             sb.AppendLine("        }");
         }
@@ -494,4 +503,57 @@ public class InterfaceMockGenerator : ISourceGenerator
 
     private static string GetBehaviorFieldName(IPropertySymbol p) => $"{p.Name}GetBehavior";
     private static string SetBehaviorFieldName(IPropertySymbol p) => $"{p.Name}SetBehavior";
+
+    /// <summary>
+    /// Returns the name of the static MethodInfo field for a method (used to avoid
+    /// per-call GetMethod reflection in generated mock implementations).
+    /// </summary>
+    private static string MethodInfoFieldName(IMethodSymbol m)
+        => $"_mi_{BehaviorFieldName(m).Replace("_Behavior", "")}";
+
+    /// <summary>
+    /// Emits the static readonly MethodInfo field declaration for a method.
+    /// When all parameter types are concrete (no open generics), the field is
+    /// initialised with a type-safe overload of GetMethod to correctly disambiguate
+    /// overloads.  Generic methods fall back to the name-only overload.
+    /// </summary>
+    private static string EmitMethodInfoField(IMethodSymbol m)
+    {
+        var iface = TypeDisplay(m.ContainingType);
+        var fieldName = MethodInfoFieldName(m);
+
+        // Determine whether every parameter type is a closed / concrete type that can
+        // be expressed as typeof(…) in a static context.
+        bool hasOpenTypeParam = m.ContainingType.TypeParameters.Length > 0
+            || m.IsGenericMethod
+            || m.Parameters.Any(p => ContainsTypeParameter(p.Type));
+
+        if (!hasOpenTypeParam)
+        {
+            var types = m.Parameters.Length == 0
+                ? "Array.Empty<Type>()"
+                : $"new Type[] {{ {string.Join(", ", m.Parameters.Select(p => $"typeof({TypeDisplay(p.Type)})"))} }}";
+            return $"    private static readonly MethodInfo {fieldName} = typeof({iface}).GetMethod(\"{m.Name}\", {types})!;\n";
+        }
+
+        // Generic interface or method – fall back to name-only GetMethod.
+        return $"    private static readonly MethodInfo {fieldName} = typeof({iface}).GetMethod(\"{m.Name}\")!;\n";
+    }
+
+    private static string PropertyGetMethodInfoFieldName(IPropertySymbol p) => $"_mi_get_{p.Name}";
+    private static string PropertySetMethodInfoFieldName(IPropertySymbol p) => $"_mi_set_{p.Name}";
+
+    /// <summary>
+    /// Returns true if the given type symbol contains an open type parameter
+    /// (either at the top level or within generic arguments).
+    /// </summary>
+    private static bool ContainsTypeParameter(ITypeSymbol type)
+    {
+        if (type is ITypeParameterSymbol) return true;
+        if (type is INamedTypeSymbol named)
+            return named.TypeArguments.Any(ContainsTypeParameter);
+        if (type is IArrayTypeSymbol arr)
+            return ContainsTypeParameter(arr.ElementType);
+        return false;
+    }
 }
