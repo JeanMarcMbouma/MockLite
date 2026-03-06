@@ -156,6 +156,25 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine("}"); // class
         if (!string.IsNullOrEmpty(ns)) sb.AppendLine("}"); // namespace
 
+        // Emit a [ModuleInitializer] registrar for non-generic interfaces so that
+        // Mock.Of<T>() can resolve the generated type via MockTypeRegistry (O(1) lookup)
+        // instead of using Type.GetType on every call.
+        // Generic interfaces are skipped because open-generic types cannot be registered.
+        if (iface.TypeParameters.Length == 0)
+        {
+            var fullyQualifiedIface = iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var fullyQualifiedMock = string.IsNullOrEmpty(ns)
+                ? $"global::{className}"
+                : $"global::{ns}.{className}";
+
+            sb.AppendLine($"internal static class {className}_Registrar");
+            sb.AppendLine("{");
+            sb.AppendLine("    [System.Runtime.CompilerServices.ModuleInitializer]");
+            sb.AppendLine($"    internal static void Register()");
+            sb.AppendLine($"        => global::BbQ.MockLite.MockTypeRegistry.Register<{fullyQualifiedIface}, {fullyQualifiedMock}>();");
+            sb.AppendLine("}");
+        }
+
         return sb.ToString();
     }
 

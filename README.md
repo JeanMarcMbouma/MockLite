@@ -363,6 +363,87 @@ var mock = Mock.Of<IAsyncRepository>();
 - **BbQ.MockLite.Sample** - Comprehensive examples and usage patterns
 - **BbQ.MockLite.Tests** - Unit tests for core functionality
 - **BbQ.MockLite.Generators.Tests** - Unit tests for source generators
+- **BbQ.MockLite.Benchmarks** - BenchmarkDotNet performance comparisons
+
+## Benchmarks
+
+The `benchmarks/MockLite.Benchmarks` project uses [BenchmarkDotNet](https://benchmarkdotnet.org/) to compare
+source-generated mocks against runtime-proxy mocks (`Mock.Create<T>`).
+
+### Running the benchmarks
+
+```bash
+dotnet run --project benchmarks/MockLite.Benchmarks -c Release
+```
+
+To run a specific group only, use the `--filter` option:
+
+```bash
+# Creation benchmarks only
+dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Creation*'
+
+# Invocation benchmarks only
+dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Invocation*'
+```
+
+### Results (BenchmarkDotNet, .NET 10, SimpleJob)
+
+#### MockCreationBenchmarks — instantiating a mock from scratch
+
+| Method | Mean | Ratio | Allocated | Alloc Ratio |
+|---|---:|---:|---:|---:|
+| `new MockCalculator()` (direct) | **15.2 ns** | 0.04× | 88 B | 0.14× |
+| `Mock.Of<ICalculator>()` (registry) | **40.4 ns** | 0.11× | 88 B | 0.14× |
+| `Mock.Create<ICalculator>()` *(baseline)* | 354 ns | 1.00× | 608 B | 1.00× |
+
+> `Mock.Of<T>()` is now **~9× faster** than `Mock.Create<T>()` and allocates **7× less** memory,  
+> thanks to the compile-time `MockTypeRegistry`: an O(1) `ConcurrentDictionary` lookup that  
+> replaces the previous per-call `Type.GetType()` + `Activator.CreateInstance()` path.
+
+#### MockInvocationBenchmarks — calling a method on an already-created mock
+
+| Method | Mean | Ratio | Allocated | Alloc Ratio |
+|---|---:|---:|---:|---:|
+| Invoke Add – source-generated | **241 ns** | 0.21× | 128 B | 0.10× |
+| Invoke Add – runtime proxy *(baseline)* | 1,166 ns | 1.00× | 1,232 B | 1.00× |
+
+> Source-generated mocks are **~4.8× faster** per call and allocate **~10× less memory**  
+> because they record invocations with a direct `List.Add` rather than going through `DispatchProxy`.
+
+#### MockSetupAndInvokeBenchmarks — configure a return value then call the method
+
+| Method | Mean | Ratio | Allocated | Alloc Ratio |
+|---|---:|---:|---:|---:|
+| Setup + invoke – source-generated | **82.5 ns** | 0.001× | 216 B | 0.02× |
+| Setup + invoke – runtime proxy *(baseline)* | 150,269 ns | 1.00× | 11,812 B | 1.00× |
+
+> Source-generated mocks are **~1,820× faster** for the setup+invoke pattern.  
+> The `Mock.Create<T>` fluent setup uses expression-tree parsing and reflection-based delegate
+> construction on every call, which dominates the runtime-proxy cost here.
+
+### What is measured
+
+| Benchmark group | Description |
+|---|---|
+| `MockCreationBenchmarks` | Time to instantiate a new mock object (three variants) |
+| `MockInvocationBenchmarks` | Time to call a method on an already-created mock |
+| `MockSetupAndInvokeBenchmarks` | Time to configure a return value and call the method once |
+
+### Why source-generated mocks are faster
+
+`[GenerateMock]` produces a concrete class at **compile time** — its methods are regular C# code
+with no reflection or expression-tree overhead. `Mock.Create<T>` wraps a `DispatchProxy` that
+intercepts every call at runtime through reflection, which adds measurable overhead for both
+invocation and setup.
+
+`Mock.Of<T>()` is fast because the source generator also emits a `[ModuleInitializer]` that
+registers a pre-compiled constructor delegate into `MockTypeRegistry` at assembly load time.
+Every subsequent call to `Mock.Of<T>()` is just an O(1) dictionary lookup — no `Type.GetType`,
+no `Activator.CreateInstance`.
+
+Use `[GenerateMock]` on interfaces you control for the best performance in hot test paths.  
+Use `Mock.Create<T>` when you need the fluent `Setup` / `Verify` / `OnCall` API for fine-grained
+test configuration, or for third-party interfaces where source generation is not available.
 
 ## Architecture
 
