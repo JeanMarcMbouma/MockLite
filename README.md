@@ -386,17 +386,17 @@ dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Cre
 dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Invocation*'
 ```
 
-### Results (BenchmarkDotNet, .NET 10, SimpleJob)
+### Results (BenchmarkDotNet v0.15.8, .NET 10.0.2, AMD EPYC 7763, Ubuntu 24.04)
 
 #### MockCreationBenchmarks — instantiating a mock from scratch
 
 | Method | Mean | Ratio | Allocated | Alloc Ratio |
 |---|---:|---:|---:|---:|
-| `new MockCalculator()` (direct) | **15.2 ns** | 0.04× | 88 B | 0.14× |
-| `Mock.Of<ICalculator>()` (registry) | **40.4 ns** | 0.11× | 88 B | 0.14× |
-| `Mock.Create<ICalculator>()` *(baseline)* | 354 ns | 1.00× | 608 B | 1.00× |
+| `new MockCalculator()` (direct) | **14.5 ns** | 0.04× | 88 B | 0.14× |
+| `Mock.Of<ICalculator>()` (registry) | **37.5 ns** | 0.11× | 88 B | 0.14× |
+| `Mock.Create<ICalculator>()` *(baseline)* | 350 ns | 1.00× | 608 B | 1.00× |
 
-> `Mock.Of<T>()` is now **~9× faster** than `Mock.Create<T>()` and allocates **7× less** memory,  
+> `Mock.Of<T>()` is **~9× faster** than `Mock.Create<T>()` and allocates **~7× less** memory,  
 > thanks to the compile-time `MockTypeRegistry`: an O(1) `ConcurrentDictionary` lookup that  
 > replaces the previous per-call `Type.GetType()` + `Activator.CreateInstance()` path.
 
@@ -404,20 +404,22 @@ dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Inv
 
 | Method | Mean | Ratio | Allocated | Alloc Ratio |
 |---|---:|---:|---:|---:|
-| Invoke Add – source-generated | **241 ns** | 0.21× | 128 B | 0.10× |
-| Invoke Add – runtime proxy *(baseline)* | 1,166 ns | 1.00× | 1,232 B | 1.00× |
+| Invoke Add – source-generated | **221 ns** | 0.92× | 128 B | 1.00× |
+| Invoke Add – runtime proxy *(baseline)* | 240 ns | 1.00× | 128 B | 1.00× |
 
-> Source-generated mocks are **~4.8× faster** per call and allocate **~10× less memory**  
-> because they record invocations with a direct `List.Add` rather than going through `DispatchProxy`.
+> Source-generated and runtime-proxy mocks now have **equivalent per-call performance** (~8%
+> difference, within measurement noise). Both record invocations via the same `List.Add`
+> path and allocate the same amount of memory per call.
 
 #### MockSetupAndInvokeBenchmarks — configure a return value then call the method
 
 | Method | Mean | Ratio | Allocated | Alloc Ratio |
 |---|---:|---:|---:|---:|
-| Setup + invoke – source-generated | **82.5 ns** | 0.001× | 216 B | 0.02× |
-| Setup + invoke – runtime proxy *(baseline)* | 150,269 ns | 1.00× | 11,812 B | 1.00× |
+| Setup + invoke – source-generated | **62.0 ns** | 0.000× | 216 B | 0.03× |
+| Setup + invoke – runtime proxy *(baseline)* | 138,937 ns | 1.00× | 7,430 B | 1.00× |
 
-> Source-generated mocks are **~1,820× faster** for the setup+invoke pattern.  
+> Source-generated mocks are **~2,240× faster** for the setup+invoke pattern and allocate
+> **~34× less** memory.  
 > The `Mock.Create<T>` fluent setup uses expression-tree parsing and reflection-based delegate
 > construction on every call, which dominates the runtime-proxy cost here.
 
@@ -432,16 +434,20 @@ dotnet run --project benchmarks/MockLite.Benchmarks -c Release -- --filter '*Inv
 ### Why source-generated mocks are faster
 
 `[GenerateMock]` produces a concrete class at **compile time** — its methods are regular C# code
-with no reflection or expression-tree overhead. `Mock.Create<T>` wraps a `DispatchProxy` that
-intercepts every call at runtime through reflection, which adds measurable overhead for both
-invocation and setup.
+with no reflection or expression-tree overhead. The **setup+invoke** path benefits most: every
+`Mock.Create<T>` setup call parses an expression tree and constructs a reflection-based delegate,
+while a source-generated mock simply calls a pre-compiled handler directly.
 
-`Mock.Of<T>()` is fast because the source generator also emits a `[ModuleInitializer]` that
-registers a pre-compiled constructor delegate into `MockTypeRegistry` at assembly load time.
-Every subsequent call to `Mock.Of<T>()` is just an O(1) dictionary lookup — no `Type.GetType`,
-no `Activator.CreateInstance`.
+**Per-call invocation** overhead has converged in recent .NET versions: both source-generated and
+runtime-proxy mocks now record invocations via the same `List.Add` path and show equivalent
+throughput (~221 ns vs ~240 ns, a difference within measurement noise).
 
-Use `[GenerateMock]` on interfaces you control for the best performance in hot test paths.  
+`Mock.Of<T>()` is fast to **instantiate** because the source generator also emits a
+`[ModuleInitializer]` that registers a pre-compiled constructor delegate into `MockTypeRegistry`
+at assembly load time. Every subsequent call to `Mock.Of<T>()` is just an O(1) dictionary
+lookup — no `Type.GetType`, no `Activator.CreateInstance`.
+
+Use `[GenerateMock]` on interfaces you control for the best creation and setup performance.  
 Use `Mock.Create<T>` when you need the fluent `Setup` / `Verify` / `OnCall` API for fine-grained
 test configuration, or for third-party interfaces where source generation is not available.
 
