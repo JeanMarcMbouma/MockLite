@@ -131,8 +131,10 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// <summary>
     /// Checks whether the invocation arguments satisfy an arg-specific setup entry.
     /// Parameters flagged as IsAny match any value; others are compared with Equals.
+    /// Uses <see cref="ReadOnlySpan{T}"/> to communicate read-only intent and enable
+    /// JIT bounds-check elision on the hot path.
     /// </summary>
-    private static bool MatchesArguments(object?[] matchArgs, bool[] isAny, object?[] invArgs)
+    private static bool MatchesArguments(ReadOnlySpan<object?> matchArgs, ReadOnlySpan<bool> isAny, ReadOnlySpan<object?> invArgs)
     {
         if (isAny.Length != invArgs.Length) return false;
         for (int i = 0; i < isAny.Length; i++)

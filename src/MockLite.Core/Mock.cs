@@ -179,7 +179,13 @@ public sealed class Mock<T> where T : class
     public void Verify(Expression<Func<T, object?>> expression, Func<int, bool> times)
     {
         var (method, _) = ExtractMethod(expression);
-        var count = _proxy.Invocations.Count(i => i.Method == method);
+        int count = 0;
+        var invocations = _proxy.Invocations;
+        for (int i = 0; i < invocations.Count; i++)
+        {
+            if (invocations[i].Method == method)
+                count++;
+        }
         if (!times(count))
             throw new VerificationException($"Verification failed for {method.Name}. Actual calls: {count}");
     }
@@ -208,7 +214,14 @@ public sealed class Mock<T> where T : class
     public void Verify(Expression<Func<T, object?>> expression, Func<object?[], bool> matcher, Func<int, bool> times)
     {
         var (method, _) = ExtractMethod(expression);
-        var count = _proxy.Invocations.Count(i => i.Method == method && matcher(i.Arguments));
+        int count = 0;
+        var invocations = _proxy.Invocations;
+        for (int i = 0; i < invocations.Count; i++)
+        {
+            var inv = invocations[i];
+            if (inv.Method == method && matcher(inv.Arguments))
+                count++;
+        }
         if (!times(count))
             throw new VerificationException($"Verification failed for {method.Name} with matcher. Actual calls: {count}");
     }
@@ -306,7 +319,13 @@ public sealed class Mock<T> where T : class
     public void VerifyGet<TProp>(Expression<Func<T, TProp>> property, Func<int, bool> times)
     {
         var pi = ExtractProperty(property);
-        var count = _proxy.Invocations.Count(i => i.Method == pi.GetMethod);
+        int count = 0;
+        var invocations = _proxy.Invocations;
+        for (int i = 0; i < invocations.Count; i++)
+        {
+            if (invocations[i].Method == pi.GetMethod)
+                count++;
+        }
         if (!times(count))
             throw new VerificationException($"Verification failed for get_{pi.Name}. Actual calls: {count}");
     }
@@ -331,7 +350,13 @@ public sealed class Mock<T> where T : class
     public void VerifySet<TProp>(Expression<Func<T, TProp>> property, Func<int, bool> times)
     {
         var pi = ExtractProperty(property);
-        var count = _proxy.Invocations.Count(i => i.Method == pi.SetMethod);
+        int count = 0;
+        var invocations = _proxy.Invocations;
+        for (int i = 0; i < invocations.Count; i++)
+        {
+            if (invocations[i].Method == pi.SetMethod)
+                count++;
+        }
         if (!times(count))
             throw new VerificationException($"Verification failed for set_{pi.Name}. Actual calls: {count}");
     }
@@ -357,7 +382,14 @@ public sealed class Mock<T> where T : class
     public void VerifySet<TProp>(Expression<Func<T, TProp>> property, Func<TProp, bool> matcher, Func<int, bool> times)
     {
         var pi = ExtractProperty(property);
-        var count = _proxy.Invocations.Count(i => i.Method == pi.SetMethod && matcher((TProp)(i.Arguments.FirstOrDefault() ?? default(TProp)!)));
+        int count = 0;
+        var invocations = _proxy.Invocations;
+        for (int i = 0; i < invocations.Count; i++)
+        {
+            var inv = invocations[i];
+            if (inv.Method == pi.SetMethod && matcher((TProp)(inv.Arguments[0] ?? default(TProp)!)))
+                count++;
+        }
         if (!times(count))
             throw new VerificationException($"Verification failed for set_{pi.Name} with matcher. Actual calls: {count}");
     }
@@ -406,7 +438,13 @@ public sealed class Mock<T> where T : class
             body = unary.Operand;
         
         if (body is MethodCallExpression call)
-            return (call.Method, call.Arguments.Select(ExtractArgument).ToArray());
+        {
+            var callArgs = call.Arguments;
+            var args = new object?[callArgs.Count];
+            for (int i = 0; i < args.Length; i++)
+                args[i] = ExtractArgument(callArgs[i]);
+            return (call.Method, args);
+        }
         throw new ArgumentException("Expression must be a method call");
     }
 
@@ -983,7 +1021,7 @@ public sealed class Mock<T> where T : class
     {
         var pi = ExtractProperty(property);
         if (pi.SetMethod != null)
-            _proxy.OnInvocation(pi.SetMethod, args => callback((TProp)(args.FirstOrDefault() ?? default(TProp)!)));
+            _proxy.OnInvocation(pi.SetMethod, args => callback((TProp)(args[0] ?? default(TProp)!)));
         return this;
     }
 
@@ -1019,12 +1057,165 @@ public sealed class Mock<T> where T : class
         {
             _proxy.OnInvocation(pi.SetMethod, args =>
             {
-                var value = (TProp)(args.FirstOrDefault() ?? default(TProp)!);
+                var value = (TProp)(args[0] ?? default(TProp)!);
                 if (matcher(value))
                     callback(value);
             });
         }
         return this;
+    }
+
+    // --- Throws Methods ---
+
+    /// <summary>
+    /// Sets up a method to throw the specified exception when called with matching arguments.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the method.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="exception">The exception to throw when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// When the method is invoked with arguments matching those in the expression,
+    /// the specified exception is thrown instead of returning a value.
+    /// Supports <c>It.IsAny&lt;T&gt;()</c> argument matchers in the expression.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.Throws(x => x.GetValue("bad-key"), new KeyNotFoundException("not found"));
+    /// mock.Throws(x => x.GetValue(It.IsAny&lt;string&gt;()), new InvalidOperationException());
+    /// </code>
+    /// </example>
+    public Mock<T> Throws<TResult>(Expression<Func<T, TResult>> expression, Exception exception)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<TResult>(() => throw exception));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets up a void method to throw the specified exception when called.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the void method to set up.</param>
+    /// <param name="exception">The exception to throw when the method is called.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// When the void method is invoked, the specified exception is thrown.
+    /// Supports <c>It.IsAny&lt;T&gt;()</c> argument matchers in the expression.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.Throws(x => x.DoSomething(), new InvalidOperationException("service unavailable"));
+    /// </code>
+    /// </example>
+    public Mock<T> Throws(Expression<Action<T>> expression, Exception exception)
+    {
+        var (method, args) = ExtractMethod(expression);
+        _proxy.Setup(method, args, new Func<object?>(() => throw exception));
+        return this;
+    }
+
+    // --- Sequence Methods ---
+
+    /// <summary>
+    /// Sets up a method to return different values on successive calls.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the method.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <param name="values">The values to return in order on successive calls. The last value is repeated once the sequence is exhausted.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// Each invocation of the method returns the next value from the sequence.
+    /// Once all values have been returned, subsequent calls return the last value.
+    /// This setup is thread-safe, using <see cref="System.Threading.Interlocked.Increment(ref int)"/>
+    /// to advance the sequence index.
+    /// Supports <c>It.IsAny&lt;T&gt;()</c> argument matchers in the expression.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.SetupSequence(x => x.GetNumber(1), 10, 20, 30);
+    /// mock.Object.GetNumber(1); // returns 10
+    /// mock.Object.GetNumber(1); // returns 20
+    /// mock.Object.GetNumber(1); // returns 30
+    /// mock.Object.GetNumber(1); // returns 30 (last value repeated)
+    /// </code>
+    /// </example>
+    public Mock<T> SetupSequence<TResult>(Expression<Func<T, TResult>> expression, params TResult[] values)
+    {
+        if (values.Length == 0)
+            throw new ArgumentException("At least one value must be provided.", nameof(values));
+
+        var (method, args) = ExtractMethod(expression);
+        int index = -1;
+        _proxy.Setup(method, args, new Func<TResult>(() =>
+        {
+            var i = System.Threading.Interlocked.Increment(ref index);
+            return i < values.Length ? values[i] : values[^1];
+        }));
+        return this;
+    }
+
+    // --- Reset Methods ---
+
+    /// <summary>
+    /// Clears all recorded invocations on this mock.
+    /// </summary>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <remarks>
+    /// This clears the <see cref="Invocations"/> list, allowing fresh verification
+    /// after resetting. Setups and callbacks are preserved—only recorded calls are removed.
+    /// Useful when testing multiple phases or re-using a mock across test stages.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var mock = Mock.Create&lt;ITestService&gt;()
+    ///     .Setup(x => x.GetNumber(1), () => 42);
+    /// mock.Object.GetNumber(1);
+    /// Assert.Single(mock.Invocations);
+    ///
+    /// mock.Reset();
+    /// Assert.Empty(mock.Invocations);
+    ///
+    /// mock.Object.GetNumber(1); // setup still works
+    /// Assert.Single(mock.Invocations);
+    /// </code>
+    /// </example>
+    public Mock<T> Reset()
+    {
+        _proxy.Invocations.Clear();
+        return this;
+    }
+
+    // --- Void Method Verification ---
+
+    /// <summary>
+    /// Verifies that a void method was called a specific number of times.
+    /// </summary>
+    /// <param name="expression">A lambda expression identifying the void method to verify.</param>
+    /// <param name="times">A predicate function that validates the invocation count.</param>
+    /// <exception cref="VerificationException">Thrown if the verification predicate returns false.</exception>
+    /// <remarks>
+    /// This overload allows direct verification of void methods without boxing.
+    /// All invocations of the specified method are counted regardless of arguments.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// mock.Object.DoSomething();
+    /// mock.Object.DoSomething();
+    /// mock.Verify(x => x.DoSomething(), Times.Exactly(2));
+    /// </code>
+    /// </example>
+    public void Verify(Expression<Action<T>> expression, Func<int, bool> times)
+    {
+        var (method, _) = ExtractMethod(expression);
+        int count = 0;
+        var invocations = _proxy.Invocations;
+        for (int i = 0; i < invocations.Count; i++)
+        {
+            if (invocations[i].Method == method)
+                count++;
+        }
+        if (!times(count))
+            throw new VerificationException($"Verification failed for {method.Name}. Actual calls: {count}");
     }
 }
 
@@ -1086,8 +1277,8 @@ public static class Mock
         var ifaceName = typeof(T).Name;
         var baseNs = typeof(T).Namespace;
         var mockName = ifaceName.Length > 1 && ifaceName[0] == 'I' && char.IsUpper(ifaceName[1])
-            ? $"Mock{ifaceName.Substring(1)}"
-            : $"Mock{ifaceName}";
+            ? string.Concat("Mock", ifaceName.AsSpan(1))
+            : string.Concat("Mock", ifaceName);
         var fullName = string.IsNullOrEmpty(baseNs) ? mockName : $"{baseNs}.{mockName}";
 
         var generated = Type.GetType(fullName);
