@@ -79,10 +79,14 @@ var mock = builder.Object;
 // Use the mock in your test
 var user = mock.GetUser("123");
 var isActive = mock.IsActive;
+mock.SaveUser(new User { Id = "123", Name = "John Doe" });
 
 // Verify method invocations
 builder.Verify(x => x.GetUser("123"), times => times == 1);
 builder.Verify(x => x.GetUser("456"), times => times == 0);
+
+// Verify void method invocations
+builder.Verify(x => x.SaveUser(new User { Id = "123", Name = "John Doe" }), Times.Once);
 
 // Verify property access
 builder.VerifyGet(x => x.IsActive, times => times >= 1);
@@ -105,9 +109,13 @@ foreach (var invocation in builder.Invocations)
 - `SetupGet<TProp>(property, getter)` - Setup property getter behavior
 - `ReturnsGet<TProp>(property, value)` - Convenience method for constant property values
 - `SetupSet<TProp>(property, setter)` - Setup property setter behavior
+- `SetupSequence<TResult>(expression, values)` - Return different values on successive calls (last value repeats)
+- `Throws<TResult>(expression, exception)` - Throw an exception when a return-value method is called
+- `Throws(expression, exception)` - Throw an exception when a void method is called
 
 **Verification Methods:**
-- `Verify(expression, times)` - Verify method was called N times
+- `Verify<TResult>(expression, times)` - Verify a return-value method was called N times
+- `Verify(voidExpression, times)` - Verify a void method was called N times
 - `Verify(expression, matcher, times)` - Verify method with argument matching
 - `VerifyGet<TProp>(property, times)` - Verify property getter access count
 - `VerifySet<TProp>(property, times)` - Verify property setter call count
@@ -124,6 +132,9 @@ foreach (var invocation in builder.Invocations)
 - `OnGetCallback<T>(property, callback)` - Execute logic when property getter is accessed
 - `OnSetCallback<T>(property, callback)` - Execute logic when property setter is called
 - `OnSetCallback<T>(property, matcher, callback)` - Execute logic when property setter is called with matching value
+
+**Reset Method:**
+- `Reset()` - Clear all recorded invocations (setups and callbacks are preserved)
 
 **Properties:**
 - `Object` - Get the mock instance
@@ -262,6 +273,79 @@ mock
         value => propertyLog.Add($"Status set to: {value}"));
 ```
 
+## Exception Throwing
+
+Configure a mock to throw an exception when a method is called:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<IUserRepository>();
+
+// Throw from a return-value method
+builder.Throws(x => x.GetUser("bad-id"), new KeyNotFoundException("User not found"));
+
+// Throw from a void method
+builder.Throws(x => x.DeleteUser("restricted"), new UnauthorizedAccessException("Cannot delete"));
+
+// Supports argument matchers
+builder.Throws(x => x.GetUser(It.IsAny<string>()), new InvalidOperationException("Service unavailable"));
+
+var mock = builder.Object;
+
+try
+{
+    mock.GetUser("bad-id");
+}
+catch (KeyNotFoundException ex)
+{
+    Console.WriteLine(ex.Message); // "User not found"
+}
+```
+
+## Sequence Setup
+
+Return different values on successive calls with `SetupSequence`. Once all values have been returned, the last value is repeated:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<ICounterService>();
+
+builder.SetupSequence(x => x.GetNext(), 10, 20, 30);
+
+var mock = builder.Object;
+
+Console.WriteLine(mock.GetNext()); // 10
+Console.WriteLine(mock.GetNext()); // 20
+Console.WriteLine(mock.GetNext()); // 30
+Console.WriteLine(mock.GetNext()); // 30 (last value repeated)
+```
+
+## Resetting Invocations
+
+Use `Reset()` to clear recorded invocations while keeping all setups and callbacks in place. This is useful when testing multiple phases with the same mock:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<IUserRepository>()
+    .Setup(x => x.GetUser("123"), () => new User { Id = "123" });
+
+var mock = builder.Object;
+
+// Phase 1
+mock.GetUser("123");
+builder.Verify(x => x.GetUser("123"), Times.Once);
+
+// Reset before phase 2
+builder.Reset();
+
+// Phase 2 — invocation count starts fresh; setup still works
+mock.GetUser("123");
+builder.Verify(x => x.GetUser("123"), Times.Once);
+```
+
 ## Two-Tier Mocking Strategy
 
 BbQ.MockLite uses an intelligent two-tier approach:
@@ -309,6 +393,28 @@ var mock = Mock.Of<IQuickMock>(); // Automatically creates runtime proxy
 
 ## Core Concepts
 
+### Argument Matchers
+
+Use `It` helpers to match arguments by predicate instead of exact value:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<IUserRepository>();
+
+// Match any value of type string
+builder.Setup(x => x.GetUser(It.IsAny<string>()), () => new User { Id = "default" });
+
+// Match values that satisfy a custom predicate
+builder.Setup(
+    x => x.GetUser(It.Matches<string>(id => id.StartsWith("admin_"))),
+    (string id) => new User { Id = id, IsAdmin = true });
+
+// Use matchers in verification
+builder.Verify(x => x.GetUser(It.IsAny<string>()), Times.AtLeast(1));
+builder.Verify(x => x.GetUser(It.Matches<string>(id => id.Length > 5)), Times.Once);
+```
+
 ### Invocation Recording
 
 All method calls on mocks are automatically recorded:
@@ -334,11 +440,12 @@ Verify method call counts with flexible predicates:
 var mock = Mock.Of<IService>();
 
 // Example predicates:
-Times.Once        // Exactly 1 call
-Times.Never       // Exactly 0 calls
-Times.Exactly(3)  // Exactly 3 calls
-Times.AtLeast(2)  // At least 2 calls
-Times.AtMost(5)   // At most 5 calls
+Times.Once           // Exactly 1 call
+Times.Never          // Exactly 0 calls
+Times.Exactly(3)     // Exactly 3 calls
+Times.AtLeast(2)     // At least 2 calls
+Times.AtMost(5)      // At most 5 calls
+Times.Between(2, 5)  // At least 2 and at most 5 calls (inclusive)
 ```
 
 ### Async Support
@@ -475,9 +582,12 @@ BbQ.MockLite Framework
 1. **Use Generated Mocks** - Always apply `[GenerateMock]` to interfaces you control
 2. **Setup First** - Configure mock behavior before using in tests
 3. **Verify Behaviors** - Use the verification API to assert interactions
-4. **Use Argument Matchers** - `It.IsAny<T>()` for flexible matching
+4. **Use Argument Matchers** - `It.IsAny<T>()` for flexible matching, `It.Matches<T>()` for predicate-based matching
 5. **Leverage Callbacks** - Use callbacks for audit logging and state tracking
 6. **Record Invocations** - Leverage invocation recording for complex verification scenarios
+7. **Test Exception Paths** - Use `Throws` to simulate failures and verify error handling
+8. **Test Sequential Behavior** - Use `SetupSequence` when order of return values matters
+9. **Reset Between Phases** - Use `Reset()` to clear invocation history when testing multiple phases
 
 ## Examples
 
