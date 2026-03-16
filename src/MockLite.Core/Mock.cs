@@ -1110,7 +1110,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> Throws(Expression<Action<T>> expression, Exception exception)
     {
         var (method, args) = ExtractMethod(expression);
-        _proxy.Setup(method, args, new Func<object?>(() => throw exception));
+        _proxy.Setup(method, args, new Action(() => throw exception));
         return this;
     }
 
@@ -1142,7 +1142,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> SetupSequence<TResult>(Expression<Func<T, TResult>> expression, params TResult[] values)
     {
         if (values.Length == 0)
-            throw new ArgumentException("At least one value must be provided.", nameof(values));
+            throw new ArgumentException("The values parameter must contain at least one element.", nameof(values));
 
         var (method, args) = ExtractMethod(expression);
         int index = -1;
