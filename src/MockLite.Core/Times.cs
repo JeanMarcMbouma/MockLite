@@ -80,11 +80,17 @@ public static class Times
     /// <param name="min">The minimum number of expected calls (inclusive).</param>
     /// <param name="max">The maximum number of expected calls (inclusive).</param>
     /// <returns>A predicate that returns <c>true</c> if the call count is between <paramref name="min"/> and <paramref name="max"/>, inclusive.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="min"/> is greater than <paramref name="max"/>.</exception>
     /// <example>
     /// <code>
     /// mock.VerifyGetUser(Times.Between(1, 3));
     /// </code>
     /// </example>
-    public static Func<int, bool> Between(int min, int max) => c => c >= min && c <= max;
+    public static Func<int, bool> Between(int min, int max)
+    {
+        if (min > max)
+            throw new ArgumentOutOfRangeException(nameof(min), $"min ({min}) must be less than or equal to max ({max}).");
+        return c => c >= min && c <= max;
+    }
 }
 

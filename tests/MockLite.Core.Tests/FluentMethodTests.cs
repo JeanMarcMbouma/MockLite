@@ -361,6 +361,13 @@ public class FluentMethodTests
             mock.Verify(x => x.DoSomething(), Times.Between(2, 5)));
     }
 
+    [Fact]
+    public void Test_TimesBetween_ThrowsWhenMinGreaterThanMax()
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentOutOfRangeException>(() => Times.Between(5, 2));
+    }
+
     // ==================== INTEGRATION TESTS ====================
 
     [Fact]
