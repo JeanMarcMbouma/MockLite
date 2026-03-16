@@ -73,5 +73,18 @@ public static class Times
     /// </code>
     /// </example>
     public static Func<int, bool> AtMost(int n) => c => c <= n;
+
+    /// <summary>
+    /// Verifies that a method was called between a minimum and maximum number of times (inclusive).
+    /// </summary>
+    /// <param name="min">The minimum number of expected calls (inclusive).</param>
+    /// <param name="max">The maximum number of expected calls (inclusive).</param>
+    /// <returns>A predicate that returns <c>true</c> if the call count is between <paramref name="min"/> and <paramref name="max"/>, inclusive.</returns>
+    /// <example>
+    /// <code>
+    /// mock.VerifyGetUser(Times.Between(1, 3));
+    /// </code>
+    /// </example>
+    public static Func<int, bool> Between(int min, int max) => c => c >= min && c <= max;
 }
 
