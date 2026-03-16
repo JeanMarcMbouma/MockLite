@@ -1126,7 +1126,7 @@ public sealed class Mock<T> where T : class
     /// <remarks>
     /// Each invocation of the method returns the next value from the sequence.
     /// Once all values have been returned, subsequent calls return the last value.
-    /// This setup is thread-safe, using <see cref="System.Threading.Interlocked.Increment(ref int)"/>
+    /// This setup is thread-safe, using Interlocked.Increment
     /// to advance the sequence index.
     /// Supports <c>It.IsAny&lt;T&gt;()</c> argument matchers in the expression.
     /// </remarks>
