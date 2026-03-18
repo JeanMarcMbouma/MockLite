@@ -692,7 +692,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             var arity = m.TypeParameters.Length;
             var paramCount = m.Parameters.Length;
-            return $"    private static readonly MethodInfo {fieldName} = typeof({iface}).GetMethods().First(m => m.Name == \"{m.Name}\" && m.IsGenericMethodDefinition && m.GetGenericArguments().Length == {arity} && m.GetParameters().Length == {paramCount});\n";
+            return $"    private static readonly MethodInfo {fieldName} = typeof({iface}).GetMethods().First(m => m.Name == \"{m.Name}\" && m.IsGenericMethodDefinition && m.GetGenericArguments().Length == {arity} && m.GetParameters().Length == {paramCount})!;\n";
         }
 
         // Generic interface – fall back to name-only GetMethod.
