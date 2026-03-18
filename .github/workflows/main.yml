@@ -21,7 +21,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
       - name: Setup NuGet.exe for use with actions
         # You may pin to the exact commit or the version.
         # uses: NuGet/setup-nuget@a21f25cd3998bf370fde17e3f1b4c12c175172f9
