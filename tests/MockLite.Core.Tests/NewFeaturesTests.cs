@@ -512,8 +512,9 @@ public class SetupPhraseCallbackTests
 
         Assert.Equal("A", mock.Object.GetValue("a"));
         Assert.Equal("B", mock.Object.GetValue("b"));
-        // OnInvocation fires for all calls to the method (not arg-filtered),
-        // so both callbacks fire on each call
+        // Note: Callback uses OnInvocation which registers a method-level listener
+        // (not arg-filtered). Both callbacks fire on every GetValue call regardless
+        // of the argument value, consistent with the existing OnCall behavior.
         Assert.Equal(4, log.Count);
         Assert.Contains("callback-a", log);
         Assert.Contains("callback-b", log);
