@@ -230,5 +230,12 @@ public class GenericMethodGeneratorTests
 
         // Verify counts by method name (generic methods share the name)
         mock.VerifySend(n => n == 2);
+
+        // Verify individual invocations recorded the correct generic type arguments
+        Assert.Equal(2, mock.Invocations.Count);
+        Assert.True(mock.Invocations[0].Method.IsGenericMethod);
+        Assert.True(mock.Invocations[1].Method.IsGenericMethod);
+        Assert.Equal("cmd1", mock.Invocations[0].Arguments[0]);
+        Assert.Equal("cmd2", mock.Invocations[1].Arguments[0]);
     }
 }
