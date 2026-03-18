@@ -321,9 +321,15 @@ public class InterfaceMockGenerator : ISourceGenerator
         var name = m.Name;
         var parmsSig = string.Join(", ", m.Parameters.Select(p => $"{TypeDisplay(p.Type)} {p.Name}"));
         var ret = TypeDisplay(m.ReturnType);
-        var argsArray = string.Join(", ", m.Parameters.Select(p => p.Name));
         var miField = MethodInfoFieldName(m);
         var sb = new StringBuilder();
+
+        // For the object[] in Invocations.Add, suppress nullable warnings for
+        // parameters whose type involves a type parameter (they could be null).
+        var invocationArgs = string.Join(", ", m.Parameters.Select(p =>
+            ContainsTypeParameter(p.Type) ? $"{p.Name}!" : p.Name));
+        // For behavior field invocation, use plain parameter names.
+        var behaviorArgs = string.Join(", ", m.Parameters.Select(p => p.Name));
 
         // Build type parameter clause + constraints for generic methods.
         var typeParamClause = "";
@@ -350,7 +356,7 @@ public class InterfaceMockGenerator : ISourceGenerator
 
         sb.AppendLine($"    public {ret} {name}{typeParamClause}({parmsSig}){constraintsClauses}");
         sb.AppendLine("    {");
-        sb.AppendLine($"        Invocations.Add(new Invocation({miField}, new object[] {{ {argsArray} }}));");
+        sb.AppendLine($"        Invocations.Add(new Invocation({miField}, new object[] {{ {invocationArgs} }}));");
 
         // Generic methods have no class-level behavior field; just return smart defaults.
         if (m.IsGenericMethod)
@@ -391,35 +397,35 @@ public class InterfaceMockGenerator : ISourceGenerator
             var field = BehaviorFieldName(m);
             if (ret == "void")
             {
-                sb.AppendLine($"        {field}?.Invoke({argsArray});");
+                sb.AppendLine($"        {field}?.Invoke({behaviorArgs});");
             }
             else if (ret == "Task")
             {
-                sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? Task.CompletedTask;");
+                sb.AppendLine($"        return {field}?.Invoke({behaviorArgs}) ?? Task.CompletedTask;");
             }
             else if (ret.StartsWith("Task<"))
             {
                 var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
                 var innerDisplay = TypeDisplay(innerType);
                 var smartDef = SmartDefault(innerType);
-                sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
+                sb.AppendLine($"        if ({field} != null) return {field}({behaviorArgs});");
                 sb.AppendLine($"        return Task.FromResult<{innerDisplay}>({smartDef});");
             }
             else if (ret == "ValueTask")
             {
-                sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? default;");
+                sb.AppendLine($"        return {field}?.Invoke({behaviorArgs}) ?? default;");
             }
             else if (ret.StartsWith("ValueTask<"))
             {
                 var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
                 var smartDef = SmartDefault(innerType);
-                sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
+                sb.AppendLine($"        if ({field} != null) return {field}({behaviorArgs});");
                 sb.AppendLine($"        return new ValueTask<{TypeDisplay(innerType)}>({smartDef});");
             }
             else
             {
                 var smartDef = SmartDefault(m.ReturnType);
-                sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? {smartDef};");
+                sb.AppendLine($"        return {field}?.Invoke({behaviorArgs}) ?? {smartDef};");
             }
         }
 
