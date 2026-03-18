@@ -178,7 +178,10 @@ public class InterfaceMockGenerator : ISourceGenerator
         foreach (var p in properties)
         {
             if (p.GetMethod is not null)
+            {
                 sb.AppendLine($"    public Func<{TypeDisplay(p.Type)}>? {GetBehaviorFieldName(p)} {{ get; set; }}");
+                sb.AppendLine($"    public Action? {GetCallbackFieldName(p)} {{ get; set; }}");
+            }
             if (p.SetMethod is not null)
                 sb.AppendLine($"    public Action<{TypeDisplay(p.Type)}>? {SetBehaviorFieldName(p)} {{ get; set; }}");
             sb.AppendLine($"    private {TypeDisplay(p.Type)}? _{p.Name};");
@@ -573,6 +576,7 @@ public class InterfaceMockGenerator : ISourceGenerator
             sb.AppendLine("        get");
             sb.AppendLine("        {");
             sb.AppendLine($"            Invocations.Add(new Invocation({PropertyGetMethodInfoFieldName(p)}, Array.Empty<object>()));");
+            sb.AppendLine($"            {GetCallbackFieldName(p)}?.Invoke();");
             sb.AppendLine($"            if ({GetBehaviorFieldName(p)} is not null) return {GetBehaviorFieldName(p)}();");
             sb.AppendLine($"            return _{name}!;");
             sb.AppendLine("        }");
@@ -654,6 +658,7 @@ public class InterfaceMockGenerator : ISourceGenerator
     }
 
     private static string GetBehaviorFieldName(IPropertySymbol p) => $"{p.Name}GetBehavior";
+    private static string GetCallbackFieldName(IPropertySymbol p) => $"{p.Name}GetCallback";
     private static string SetBehaviorFieldName(IPropertySymbol p) => $"{p.Name}SetBehavior";
 
     // --- Phrase-returning property setup methods (generated equivalents of GetSetupPhrase / SetSetupPhrase) ---
@@ -670,6 +675,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine($"        public {className} Returns({type} value) {{ _mock.{GetBehaviorFieldName(p)} = () => value; return _mock; }}");
         sb.AppendLine($"        public {className} Returns(Func<{type}> factory) {{ _mock.{GetBehaviorFieldName(p)} = factory; return _mock; }}");
         sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{GetBehaviorFieldName(p)} = () => throw ex; return _mock; }}");
+        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{GetCallbackFieldName(p)} = callback; return this; }}");
         sb.AppendLine("    }");
         sb.AppendLine($"    public {structName} SetupGet{p.Name}() => new {structName}(this);");
         return sb.ToString();
