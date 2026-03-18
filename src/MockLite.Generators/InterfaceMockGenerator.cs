@@ -194,10 +194,13 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.Append(EmitMethodImplementation(m));
             sb.Append(EmitMethodSetup(m, className));
-            sb.Append(EmitMethodSetupWithMatcher(m, className));
+            // Skip matcher overloads for parameterless methods (signatures would be identical).
+            if (m.Parameters.Length > 0)
+                sb.Append(EmitMethodSetupWithMatcher(m, className));
             sb.Append(EmitMethodReturns(m, className));
             sb.Append(EmitMethodVerify(m));
-            sb.Append(EmitMethodVerifyWithMatcher(m));
+            if (m.Parameters.Length > 0)
+                sb.Append(EmitMethodVerifyWithMatcher(m));
         }
 
         // Implement properties
@@ -329,9 +332,10 @@ public class InterfaceMockGenerator : ISourceGenerator
         else if (ret.StartsWith("Task<"))
         {
             var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
+            var innerDisplay = TypeDisplay(innerType);
             var smartDef = SmartDefault(innerType);
             sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
-            sb.AppendLine($"        return Task.FromResult({smartDef});");
+            sb.AppendLine($"        return Task.FromResult<{innerDisplay}>({smartDef});");
         }
         else if (ret == "ValueTask")
         {
@@ -392,7 +396,7 @@ public class InterfaceMockGenerator : ISourceGenerator
             else if (ret.StartsWith("Task<") && m.ReturnType is INamedTypeSymbol taskNamed)
             {
                 var innerDefault = SmartDefault(taskNamed.TypeArguments[0]);
-                def = $"Task.FromResult({innerDefault})";
+                def = $"Task.FromResult<{TypeDisplay(taskNamed.TypeArguments[0])}>({innerDefault})";
             }
             else if (ret == "ValueTask")
             {
