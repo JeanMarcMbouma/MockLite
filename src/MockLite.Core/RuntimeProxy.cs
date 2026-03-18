@@ -268,6 +268,7 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
 
         var setupArgs = setupMethod.GetGenericArguments();
         var targetArgs = targetMethod.GetGenericArguments();
+        if (setupArgs.Length != targetArgs.Length) return false;
         for (int i = 0; i < setupArgs.Length; i++)
         {
             if (setupArgs[i] != typeof(object) && setupArgs[i] != targetArgs[i])
