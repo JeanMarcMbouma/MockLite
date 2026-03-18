@@ -229,6 +229,155 @@ public sealed class Mock<T> where T : class
         }
     }
 
+    // --- Fluent Property Setup (Moq-style) ---
+
+    /// <summary>
+    /// Begins a fluent setup for a property getter, returning a <see cref="GetSetupPhrase{TProp}"/>
+    /// that allows chaining <c>.Returns(value)</c>, <c>.Callback(...)</c>, or <c>.Throws(ex)</c>.
+    /// </summary>
+    /// <typeparam name="TProp">The type of the property.</typeparam>
+    /// <param name="property">A lambda expression identifying the property to set up.</param>
+    /// <returns>A setup phrase for chaining <c>Returns</c>/<c>Callback</c>/<c>Throws</c>.</returns>
+    /// <example>
+    /// <code>
+    /// mock.SetupGet(x => x.Name).Returns("John");
+    /// mock.SetupGet(x => x.Count).Callback(() => log.Add("read")).Returns(42);
+    /// </code>
+    /// </example>
+    public GetSetupPhrase<TProp> SetupGet<TProp>(Expression<Func<T, TProp>> property)
+    {
+        var pi = ExtractProperty(property);
+        return new GetSetupPhrase<TProp>(this, pi);
+    }
+
+    /// <summary>
+    /// Begins a fluent setup for a property setter, returning a <see cref="SetSetupPhrase{TProp}"/>
+    /// that allows chaining <c>.Callback(...)</c> or <c>.Throws(ex)</c>.
+    /// </summary>
+    /// <typeparam name="TProp">The type of the property.</typeparam>
+    /// <param name="property">A lambda expression identifying the property to set up.</param>
+    /// <returns>A setup phrase for chaining <c>Callback</c>/<c>Throws</c>.</returns>
+    /// <example>
+    /// <code>
+    /// mock.SetupSet(x => x.Name).Callback(v => log.Add(v));
+    /// mock.SetupSet(x => x.Name).Throws(new InvalidOperationException("read-only"));
+    /// </code>
+    /// </example>
+    public SetSetupPhrase<TProp> SetupSet<TProp>(Expression<Func<T, TProp>> property)
+    {
+        var pi = ExtractProperty(property);
+        return new SetSetupPhrase<TProp>(this, pi);
+    }
+
+    /// <summary>
+    /// Provides fluent continuation methods (<c>Returns</c>, <c>Callback</c>, <c>Throws</c>)
+    /// after a <c>SetupGet</c> call for property getters.
+    /// <c>Callback</c> returns the phrase for further chaining,
+    /// while <c>Returns</c>/<c>Throws</c> terminate the phrase and return <c>Mock&lt;T&gt;</c>.
+    /// </summary>
+    public readonly struct GetSetupPhrase<TProp>
+    {
+        private readonly Mock<T> _mock;
+        private readonly PropertyInfo _property;
+
+        internal GetSetupPhrase(Mock<T> mock, PropertyInfo property)
+        {
+            _mock = mock;
+            _property = property;
+        }
+
+        /// <summary>
+        /// Configures the property getter to return the specified value.
+        /// </summary>
+        public Mock<T> Returns(TProp value)
+        {
+            if (_property.GetMethod != null)
+                _mock._proxy.Setup(_property.GetMethod, new Func<TProp>(() => value));
+            return _mock;
+        }
+
+        /// <summary>
+        /// Configures the property getter with a value factory invoked on each access.
+        /// </summary>
+        public Mock<T> Returns(Func<TProp> valueFactory)
+        {
+            if (_property.GetMethod != null)
+                _mock._proxy.Setup(_property.GetMethod, valueFactory);
+            return _mock;
+        }
+
+        /// <summary>
+        /// Configures the property getter to throw the specified exception when accessed.
+        /// </summary>
+        public Mock<T> Throws(Exception exception)
+        {
+            if (_property.GetMethod != null)
+                _mock._proxy.Setup(_property.GetMethod, new Func<TProp>(() => throw exception));
+            return _mock;
+        }
+
+        /// <summary>
+        /// Registers a parameterless callback that executes whenever the property getter is accessed.
+        /// Returns the phrase so you can continue chaining <c>.Returns()</c> etc.
+        /// </summary>
+        public GetSetupPhrase<TProp> Callback(Action callback)
+        {
+            if (_property.GetMethod != null)
+                _mock._proxy.OnInvocation(_property.GetMethod, _ => callback());
+            return this;
+        }
+    }
+
+    /// <summary>
+    /// Provides fluent continuation methods (<c>Callback</c>, <c>Throws</c>)
+    /// after a <c>SetupSet</c> call for property setters.
+    /// <c>Callback</c> returns the phrase for further chaining,
+    /// while <c>Throws</c> terminates the phrase and returns <c>Mock&lt;T&gt;</c>.
+    /// </summary>
+    public readonly struct SetSetupPhrase<TProp>
+    {
+        private readonly Mock<T> _mock;
+        private readonly PropertyInfo _property;
+
+        internal SetSetupPhrase(Mock<T> mock, PropertyInfo property)
+        {
+            _mock = mock;
+            _property = property;
+        }
+
+        /// <summary>
+        /// Configures the property setter to throw the specified exception when assigned.
+        /// </summary>
+        public Mock<T> Throws(Exception exception)
+        {
+            if (_property.SetMethod != null)
+                _mock._proxy.Setup(_property.SetMethod, new Action<TProp>(_ => throw exception));
+            return _mock;
+        }
+
+        /// <summary>
+        /// Registers a parameterless callback that executes whenever the property setter is called.
+        /// Returns the phrase so you can continue chaining.
+        /// </summary>
+        public SetSetupPhrase<TProp> Callback(Action callback)
+        {
+            if (_property.SetMethod != null)
+                _mock._proxy.OnInvocation(_property.SetMethod, _ => callback());
+            return this;
+        }
+
+        /// <summary>
+        /// Registers a strongly-typed callback that receives the assigned value whenever the property setter is called.
+        /// Returns the phrase so you can continue chaining.
+        /// </summary>
+        public SetSetupPhrase<TProp> Callback(Action<TProp> callback)
+        {
+            if (_property.SetMethod != null)
+                _mock._proxy.OnInvocation(_property.SetMethod, args => callback((TProp)args[0]!));
+            return this;
+        }
+    }
+
     // --- SetReturnsDefault ---
 
     /// <summary>

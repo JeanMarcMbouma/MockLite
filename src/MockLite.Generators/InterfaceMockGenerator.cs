@@ -219,12 +219,14 @@ public class InterfaceMockGenerator : ISourceGenerator
             if (p.GetMethod is not null)
             {
                 sb.Append(EmitPropertyGetSetup(p, className));
+                sb.Append(EmitPropertyGetPhraseStruct(p, className));
                 sb.Append(EmitPropertyGetVerify(p));
             }
             if (p.SetMethod is not null)
             {
                 sb.Append(EmitPropertySetSetup(p, className));
                 sb.Append(EmitPropertySetSetupWithMatcher(p, className));
+                sb.Append(EmitPropertySetPhraseStruct(p, className));
                 sb.Append(EmitPropertySetVerify(p));
                 sb.Append(EmitPropertySetVerifyWithMatcher(p));
             }
@@ -653,6 +655,42 @@ public class InterfaceMockGenerator : ISourceGenerator
 
     private static string GetBehaviorFieldName(IPropertySymbol p) => $"{p.Name}GetBehavior";
     private static string SetBehaviorFieldName(IPropertySymbol p) => $"{p.Name}SetBehavior";
+
+    // --- Phrase-returning property setup methods (generated equivalents of GetSetupPhrase / SetSetupPhrase) ---
+
+    private static string EmitPropertyGetPhraseStruct(IPropertySymbol p, string className)
+    {
+        var type = TypeDisplay(p.Type);
+        var structName = $"GetSetupPhrase_{p.Name}";
+        var sb = new StringBuilder();
+        sb.AppendLine($"    public readonly struct {structName}");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        private readonly {className} _mock;");
+        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
+        sb.AppendLine($"        public {className} Returns({type} value) {{ _mock.{GetBehaviorFieldName(p)} = () => value; return _mock; }}");
+        sb.AppendLine($"        public {className} Returns(Func<{type}> factory) {{ _mock.{GetBehaviorFieldName(p)} = factory; return _mock; }}");
+        sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{GetBehaviorFieldName(p)} = () => throw ex; return _mock; }}");
+        sb.AppendLine("    }");
+        sb.AppendLine($"    public {structName} SetupGet{p.Name}() => new {structName}(this);");
+        return sb.ToString();
+    }
+
+    private static string EmitPropertySetPhraseStruct(IPropertySymbol p, string className)
+    {
+        var type = TypeDisplay(p.Type);
+        var structName = $"SetSetupPhrase_{p.Name}";
+        var sb = new StringBuilder();
+        sb.AppendLine($"    public readonly struct {structName}");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        private readonly {className} _mock;");
+        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
+        sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{SetBehaviorFieldName(p)} = _ => throw ex; return _mock; }}");
+        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{SetBehaviorFieldName(p)} = _ => callback(); return this; }}");
+        sb.AppendLine($"        public {structName} Callback(Action<{type}> callback) {{ _mock.{SetBehaviorFieldName(p)} = callback; return this; }}");
+        sb.AppendLine("    }");
+        sb.AppendLine($"    public {structName} SetupSet{p.Name}() => new {structName}(this);");
+        return sb.ToString();
+    }
 
     /// <summary>
     /// Returns the name of the static MethodInfo field for a method (used to avoid
