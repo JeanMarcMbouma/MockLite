@@ -728,6 +728,7 @@ public sealed class Mock<T> where T : class
 
         var expectedArgs = expected.GetGenericArguments();
         var recordedArgs = recorded.GetGenericArguments();
+        if (expectedArgs.Length != recordedArgs.Length) return false;
         for (int i = 0; i < expectedArgs.Length; i++)
         {
             if (expectedArgs[i] != typeof(object) && expectedArgs[i] != recordedArgs[i])
