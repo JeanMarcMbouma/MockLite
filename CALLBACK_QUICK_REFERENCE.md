@@ -66,6 +66,23 @@ builder
     .OnSetCallback(x => x.IsReady, v => Console.WriteLine($"IsReady → {v}"));
 ```
 
+### Moq-style fluent callback (Setup + Callback + Returns)
+
+```csharp
+var captured = new List<string>();
+builder.Setup(x => x.GetUser(It.IsAny<string>()))
+    .Callback<string>(id => captured.Add(id))
+    .Returns(new User { Id = "default" });
+```
+
+### Fluent callback with ReturnsAsync
+
+```csharp
+builder.Setup(x => x.GetUserAsync("123"))
+    .Callback(() => callLog.Add("async call"))
+    .ReturnsAsync(new User { Id = "123" });
+```
+
 ---
 
 ## Callback Cheat Sheet
@@ -81,6 +98,10 @@ builder
 | Property set | `OnSetCallback(prop, value => ...)` |
 | Conditional property set | `OnSetCallback(prop, matcher, value => ...)` |
 | Get or set | `OnPropertyAccess(prop, () => ...)` |
+| Fluent callback + return | `Setup(expr).Callback(() => ...).Returns(val)` |
+| Fluent typed callback | `Setup(expr).Callback<T1>((a) => ...).Returns(val)` |
+| Fluent callback + async | `Setup(expr).Callback(() => ...).ReturnsAsync(val)` |
+| Fluent callback + throw | `Setup(expr).Callback(() => ...).Throws(ex)` |
 
 ---
 
