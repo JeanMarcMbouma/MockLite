@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace BbQ.MockLite;
 
@@ -52,6 +53,126 @@ public sealed class Mock<T> where T : class
     public Mock()
     {
         _proxy = RuntimeProxy.Create<T>() as RuntimeProxy<T> ?? throw new InvalidOperationException("Failed to create proxy");
+    }
+
+    // --- Fluent Setup (Moq-style) ---
+
+    /// <summary>
+    /// Begins a fluent setup for a method, returning a <see cref="SetupPhrase{TResult}"/>
+    /// that allows chaining <c>.Returns(value)</c>, <c>.ReturnsAsync(value)</c>, or <c>.Throws(ex)</c>.
+    /// This is the Moq-compatible overload that solves covariant return type inference.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the method.</typeparam>
+    /// <param name="expression">A lambda expression identifying the method to set up.</param>
+    /// <returns>A setup phrase for chaining <c>Returns</c>/<c>ReturnsAsync</c>/<c>Throws</c>.</returns>
+    /// <example>
+    /// <code>
+    /// mock.Setup(x => x.GetUser("123")).Returns(new User { Id = "123" });
+    /// mock.Setup(x => x.GetUsersAsync()).ReturnsAsync(new[] { user1, user2 });
+    /// </code>
+    /// </example>
+    public SetupPhrase<TResult> Setup<TResult>(Expression<Func<T, TResult>> expression)
+    {
+        var (method, args) = ExtractMethod(expression);
+        return new SetupPhrase<TResult>(this, method, args);
+    }
+
+    /// <summary>
+    /// Provides fluent continuation methods (<c>Returns</c>, <c>ReturnsAsync</c>, <c>Throws</c>)
+    /// after a <c>Setup</c> call. Solves the covariant return type inference problem: when
+    /// a method returns <c>Task&lt;IEnumerable&lt;T&gt;&gt;</c>, you can pass a <c>T[]</c>
+    /// or <c>List&lt;T&gt;</c> to <c>ReturnsAsync</c> without explicit casting.
+    /// </summary>
+    public readonly struct SetupPhrase<TResult>
+    {
+        private readonly Mock<T> _mock;
+        private readonly MethodInfo _method;
+        private readonly object?[] _args;
+
+        internal SetupPhrase(Mock<T> mock, MethodInfo method, object?[] args)
+        {
+            _mock = mock;
+            _method = method;
+            _args = args;
+        }
+
+        /// <summary>
+        /// Configures the method to return the specified value.
+        /// </summary>
+        public Mock<T> Returns(TResult value)
+        {
+            _mock._proxy.Setup(_method, _args, new Func<TResult>(() => value));
+            return _mock;
+        }
+
+        /// <summary>
+        /// Configures the method with a value factory invoked on each call.
+        /// </summary>
+        public Mock<T> Returns(Func<TResult> valueFactory)
+        {
+            _mock._proxy.Setup(_method, _args, valueFactory);
+            return _mock;
+        }
+
+        /// <summary>
+        /// For <c>Task&lt;TInner&gt;</c>-returning methods, configures the method to return
+        /// <c>Task.FromResult(value)</c>. Handles covariance: accepts <c>T[]</c> when the
+        /// method returns <c>Task&lt;IEnumerable&lt;T&gt;&gt;</c>.
+        /// </summary>
+        /// <typeparam name="TInner">The inner value type (unwrapped from Task).</typeparam>
+        /// <param name="value">The value to wrap in a completed Task.</param>
+        public Mock<T> ReturnsAsync<TInner>(TInner value)
+        {
+            var resultType = typeof(TResult);
+            if (resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                var innerType = resultType.GenericTypeArguments[0];
+                if (innerType.IsAssignableFrom(typeof(TInner)))
+                {
+                    // Create Task.FromResult<innerType>(value) to get the correct Task<TReturn> type.
+                    var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
+                        .MakeGenericMethod(innerType)
+                        .Invoke(null, new object?[] { value });
+                    var castTask = (TResult)task!;
+                    _mock._proxy.Setup(_method, _args, new Func<TResult>(() => castTask));
+                    return _mock;
+                }
+            }
+            throw new InvalidOperationException(
+                $"ReturnsAsync<{typeof(TInner).Name}> can only be used when the method returns Task<T> " +
+                $"and {typeof(TInner).Name} is assignable to T. Method returns {resultType.Name}.");
+        }
+
+        /// <summary>
+        /// Configures the method to throw the specified exception when called.
+        /// </summary>
+        public Mock<T> Throws(Exception exception)
+        {
+            _mock._proxy.Setup(_method, _args, new Func<TResult>(() => throw exception));
+            return _mock;
+        }
+    }
+
+    // --- SetReturnsDefault ---
+
+    /// <summary>
+    /// Sets a blanket default return value for a specific type across all unconfigured methods.
+    /// Any method that returns <typeparamref name="TDefault"/> (and has no specific setup) will
+    /// return <paramref name="value"/> instead of the built-in default.
+    /// </summary>
+    /// <typeparam name="TDefault">The return type to set a default for.</typeparam>
+    /// <param name="value">The default value to return.</param>
+    /// <returns>The current builder instance for method chaining.</returns>
+    /// <example>
+    /// <code>
+    /// mock.SetReturnsDefault&lt;string&gt;("default-value");
+    /// mock.SetReturnsDefault&lt;IEnumerable&lt;User&gt;&gt;(new List&lt;User&gt;());
+    /// </code>
+    /// </example>
+    public Mock<T> SetReturnsDefault<TDefault>(TDefault value)
+    {
+        _proxy.SetDefault(typeof(TDefault), value);
+        return this;
     }
 
     // --- Setup Methods ---
@@ -176,7 +297,7 @@ public sealed class Mock<T> where T : class
     /// builder.Verify(x => x.GetUser("123"), times => times == 1);
     /// </code>
     /// </example>
-    public void Verify(Expression<Func<T, object?>> expression, Func<int, bool> times)
+    public void Verify(Expression<Func<T, object?>> expression, Func<int, bool> times, string? message = null)
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
@@ -187,7 +308,10 @@ public sealed class Mock<T> where T : class
                 count++;
         }
         if (!times(count))
-            throw new VerificationException($"Verification failed for {method.Name}. Actual calls: {count}");
+        {
+            var line = $"Verification failed for {method.Name}. Actual calls: {count}";
+            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+        }
     }
 
     /// <summary>
@@ -211,7 +335,7 @@ public sealed class Mock<T> where T : class
     /// );
     /// </code>
     /// </example>
-    public void Verify(Expression<Func<T, object?>> expression, Func<object?[], bool> matcher, Func<int, bool> times)
+    public void Verify(Expression<Func<T, object?>> expression, Func<object?[], bool> matcher, Func<int, bool> times, string? message = null)
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
@@ -223,7 +347,10 @@ public sealed class Mock<T> where T : class
                 count++;
         }
         if (!times(count))
-            throw new VerificationException($"Verification failed for {method.Name} with matcher. Actual calls: {count}");
+        {
+            var line = $"Verification failed for {method.Name} with matcher. Actual calls: {count}";
+            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+        }
     }
 
     // --- Property Setup Methods ---
@@ -316,7 +443,7 @@ public sealed class Mock<T> where T : class
     /// builder.VerifyGet(x => x.IsActive, times => times >= 1);
     /// </code>
     /// </example>
-    public void VerifyGet<TProp>(Expression<Func<T, TProp>> property, Func<int, bool> times)
+    public void VerifyGet<TProp>(Expression<Func<T, TProp>> property, Func<int, bool> times, string? message = null)
     {
         var pi = ExtractProperty(property);
         int count = 0;
@@ -327,7 +454,10 @@ public sealed class Mock<T> where T : class
                 count++;
         }
         if (!times(count))
-            throw new VerificationException($"Verification failed for get_{pi.Name}. Actual calls: {count}");
+        {
+            var line = $"Verification failed for get_{pi.Name}. Actual calls: {count}";
+            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+        }
     }
 
     /// <summary>
@@ -347,7 +477,7 @@ public sealed class Mock<T> where T : class
     /// builder.VerifySet(x => x.Name, times => times == 1);
     /// </code>
     /// </example>
-    public void VerifySet<TProp>(Expression<Func<T, TProp>> property, Func<int, bool> times)
+    public void VerifySet<TProp>(Expression<Func<T, TProp>> property, Func<int, bool> times, string? message = null)
     {
         var pi = ExtractProperty(property);
         int count = 0;
@@ -358,7 +488,10 @@ public sealed class Mock<T> where T : class
                 count++;
         }
         if (!times(count))
-            throw new VerificationException($"Verification failed for set_{pi.Name}. Actual calls: {count}");
+        {
+            var line = $"Verification failed for set_{pi.Name}. Actual calls: {count}";
+            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+        }
     }
 
     /// <summary>
@@ -379,7 +512,7 @@ public sealed class Mock<T> where T : class
     /// builder.VerifySet(x => x.Name, value => value == "John", times => times == 1);
     /// </code>
     /// </example>
-    public void VerifySet<TProp>(Expression<Func<T, TProp>> property, Func<TProp, bool> matcher, Func<int, bool> times)
+    public void VerifySet<TProp>(Expression<Func<T, TProp>> property, Func<TProp, bool> matcher, Func<int, bool> times, string? message = null)
     {
         var pi = ExtractProperty(property);
         int count = 0;
@@ -391,7 +524,10 @@ public sealed class Mock<T> where T : class
                 count++;
         }
         if (!times(count))
-            throw new VerificationException($"Verification failed for set_{pi.Name} with matcher. Actual calls: {count}");
+        {
+            var line = $"Verification failed for set_{pi.Name} with matcher. Actual calls: {count}";
+            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+        }
     }
 
     // --- Properties ---
@@ -1204,7 +1340,7 @@ public sealed class Mock<T> where T : class
     /// mock.Verify(x => x.DoSomething(), Times.Exactly(2));
     /// </code>
     /// </example>
-    public void Verify(Expression<Action<T>> expression, Func<int, bool> times)
+    public void Verify(Expression<Action<T>> expression, Func<int, bool> times, string? message = null)
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
@@ -1215,7 +1351,10 @@ public sealed class Mock<T> where T : class
                 count++;
         }
         if (!times(count))
-            throw new VerificationException($"Verification failed for {method.Name}. Actual calls: {count}");
+        {
+            var line = $"Verification failed for {method.Name}. Actual calls: {count}";
+            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+        }
     }
 }
 

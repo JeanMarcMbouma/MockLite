@@ -76,6 +76,62 @@ public class InterfaceMockGenerator : ISourceGenerator
             ? $"Mock{ifaceName.Substring(1)}"
             : $"Mock{ifaceName}";
 
+    /// <summary>
+    /// Collects all methods from the interface and its entire inheritance hierarchy,
+    /// deduplicating by signature hash to handle diamond inheritance correctly.
+    /// </summary>
+    private static List<IMethodSymbol> GetAllMethods(INamedTypeSymbol iface)
+    {
+        var seen = new HashSet<string>();
+        var result = new List<IMethodSymbol>();
+
+        foreach (var m in iface.GetMembers().OfType<IMethodSymbol>()
+            .Where(m => m.MethodKind == MethodKind.Ordinary))
+        {
+            if (seen.Add(SignatureHash(m)))
+                result.Add(m);
+        }
+
+        foreach (var baseIface in iface.AllInterfaces)
+        {
+            foreach (var m in baseIface.GetMembers().OfType<IMethodSymbol>()
+                .Where(m => m.MethodKind == MethodKind.Ordinary))
+            {
+                if (seen.Add(SignatureHash(m)))
+                    result.Add(m);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Collects all properties from the interface and its entire inheritance hierarchy,
+    /// deduplicating by name to handle diamond inheritance correctly.
+    /// </summary>
+    private static List<IPropertySymbol> GetAllProperties(INamedTypeSymbol iface)
+    {
+        var seen = new HashSet<string>();
+        var result = new List<IPropertySymbol>();
+
+        foreach (var p in iface.GetMembers().OfType<IPropertySymbol>())
+        {
+            if (seen.Add(p.Name))
+                result.Add(p);
+        }
+
+        foreach (var baseIface in iface.AllInterfaces)
+        {
+            foreach (var p in baseIface.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (seen.Add(p.Name))
+                    result.Add(p);
+            }
+        }
+
+        return result;
+    }
+
     private static string GenerateMockSource(Compilation compilation, INamedTypeSymbol iface)
     {
         var ns = iface.ContainingNamespace.IsGlobalNamespace ? null : iface.ContainingNamespace.ToDisplayString();
@@ -98,8 +154,11 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine("{");
         sb.AppendLine("    public List<Invocation> Invocations { get; } = new();");
 
+        // Collect all methods and properties from the interface hierarchy (composite interface support).
+        var methods = GetAllMethods(iface);
+        var properties = GetAllProperties(iface);
+
         // Behavior fields per method overload with signature hash
-        var methods = iface.GetMembers().OfType<IMethodSymbol>().Where(m => m.MethodKind == MethodKind.Ordinary).ToList();
         foreach (var m in methods)
         {
             var field = BehaviorFieldName(m);
@@ -112,7 +171,7 @@ public class InterfaceMockGenerator : ISourceGenerator
             sb.Append(EmitMethodInfoField(m));
 
         // Property behavior fields
-        foreach (var p in iface.GetMembers().OfType<IPropertySymbol>())
+        foreach (var p in properties)
         {
             if (p.GetMethod is not null)
                 sb.AppendLine($"    public Func<{TypeDisplay(p.Type)}>? {GetBehaviorFieldName(p)} {{ get; set; }}");
@@ -122,7 +181,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         }
 
         // Static cached MethodInfo fields for property accessors.
-        foreach (var p in iface.GetMembers().OfType<IPropertySymbol>())
+        foreach (var p in properties)
         {
             if (p.GetMethod is not null)
                 sb.AppendLine($"    private static readonly MethodInfo {PropertyGetMethodInfoFieldName(p)} = typeof({TypeDisplay(p.ContainingType)}).GetProperty(\"{p.Name}\")!.GetGetMethod()!;");
@@ -134,26 +193,26 @@ public class InterfaceMockGenerator : ISourceGenerator
         foreach (var m in methods)
         {
             sb.Append(EmitMethodImplementation(m));
-            sb.Append(EmitMethodSetup(m));
-            sb.Append(EmitMethodSetupWithMatcher(m));
-            sb.Append(EmitMethodReturns(m));
+            sb.Append(EmitMethodSetup(m, className));
+            sb.Append(EmitMethodSetupWithMatcher(m, className));
+            sb.Append(EmitMethodReturns(m, className));
             sb.Append(EmitMethodVerify(m));
             sb.Append(EmitMethodVerifyWithMatcher(m));
         }
 
         // Implement properties
-        foreach (var p in iface.GetMembers().OfType<IPropertySymbol>())
+        foreach (var p in properties)
         {
             sb.Append(EmitPropertyImplementation(p));
             if (p.GetMethod is not null)
             {
-                sb.Append(EmitPropertyGetSetup(p));
+                sb.Append(EmitPropertyGetSetup(p, className));
                 sb.Append(EmitPropertyGetVerify(p));
             }
             if (p.SetMethod is not null)
             {
-                sb.Append(EmitPropertySetSetup(p));
-                sb.Append(EmitPropertySetSetupWithMatcher(p));
+                sb.Append(EmitPropertySetSetup(p, className));
+                sb.Append(EmitPropertySetSetupWithMatcher(p, className));
                 sb.Append(EmitPropertySetVerify(p));
                 sb.Append(EmitPropertySetVerifyWithMatcher(p));
             }
@@ -269,9 +328,10 @@ public class InterfaceMockGenerator : ISourceGenerator
         }
         else if (ret.StartsWith("Task<"))
         {
-            var tArg = ret.Substring(5, ret.Length - 6);
+            var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
+            var smartDef = SmartDefault(innerType);
             sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
-            sb.AppendLine($"        return Task.FromResult(default({tArg}))!;");
+            sb.AppendLine($"        return Task.FromResult({smartDef});");
         }
         else if (ret == "ValueTask")
         {
@@ -279,30 +339,30 @@ public class InterfaceMockGenerator : ISourceGenerator
         }
         else if (ret.StartsWith("ValueTask<"))
         {
-            var tArg = ret.Substring(10, ret.Length - 11);
+            var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
+            var smartDef = SmartDefault(innerType);
             sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
-            sb.AppendLine($"        return new ValueTask<{tArg}>(default);");
+            sb.AppendLine($"        return new ValueTask<{TypeDisplay(innerType)}>({smartDef});");
         }
         else
         {
-            sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? default({ret})!;");
+            var smartDef = SmartDefault(m.ReturnType);
+            sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? {smartDef};");
         }
 
         sb.AppendLine("    }");
         return sb.ToString();
     }
 
-    private static string EmitMethodSetup(IMethodSymbol m)
+    private static string EmitMethodSetup(IMethodSymbol m, string className)
     {
-        var className = GetMockClassName(m.ContainingType.Name);
         var field = BehaviorFieldName(m);
         var behaviorType = BehaviorDelegateType(m);
         return $"    public {className} Setup{m.Name}({behaviorType} behavior) {{ {field} = behavior; return this; }}\n";
     }
 
-    private static string EmitMethodSetupWithMatcher(IMethodSymbol m)
+    private static string EmitMethodSetupWithMatcher(IMethodSymbol m, string className)
     {
-        var className = GetMockClassName(m.ContainingType.Name);
         var field = BehaviorFieldName(m);
         var ret = TypeDisplay(m.ReturnType);
         var args = string.Join(", ", m.Parameters.Select(p => p.Name));
@@ -323,21 +383,36 @@ public class InterfaceMockGenerator : ISourceGenerator
             sb.AppendLine("        return this;");
             sb.AppendLine("    }");
             sb.AppendLine();
-            // Add helper to generate default async result
-            var def = ret switch
+            // Add helper to generate default async result using smart defaults
+            string def;
+            if (ret == "Task")
             {
-                "Task" => "Task.CompletedTask",
-                var s when s.StartsWith("Task<") => $"Task.FromResult(default({s.Substring(5, s.Length - 6)})!)",
-                "ValueTask" => "default",
-                var s when s.StartsWith("ValueTask<") => $"new ValueTask<{s.Substring(10, s.Length - 11)}>(default)",
-                _ => $"default({ret})",
-            };
+                def = "Task.CompletedTask";
+            }
+            else if (ret.StartsWith("Task<") && m.ReturnType is INamedTypeSymbol taskNamed)
+            {
+                var innerDefault = SmartDefault(taskNamed.TypeArguments[0]);
+                def = $"Task.FromResult({innerDefault})";
+            }
+            else if (ret == "ValueTask")
+            {
+                def = "default";
+            }
+            else if (ret.StartsWith("ValueTask<") && m.ReturnType is INamedTypeSymbol vtNamed)
+            {
+                var innerDefault = SmartDefault(vtNamed.TypeArguments[0]);
+                def = $"new ValueTask<{TypeDisplay(vtNamed.TypeArguments[0])}>({innerDefault})";
+            }
+            else
+            {
+                def = SmartDefault(m.ReturnType);
+            }
             sb.AppendLine($"    private static {ret} GetDefault{m.Name}() => {def};");
             return sb.ToString();
         }
         else
         {
-            var def = $"default({ret})";
+            var def = SmartDefault(m.ReturnType);
             sb.AppendLine($"        {field} = ({args}) => ({conj}) ? behavior({args}) : {def};");
         }
         sb.AppendLine($"        return this;");
@@ -345,9 +420,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         return sb.ToString();
     }
 
-    private static string EmitMethodReturns(IMethodSymbol m)
+    private static string EmitMethodReturns(IMethodSymbol m, string className)
     {
-        var className = GetMockClassName(m.ContainingType.Name);
         var field = BehaviorFieldName(m);
         var ret = TypeDisplay(m.ReturnType);
         var args = string.Join(", ", m.Parameters.Select(p => p.Name));
@@ -435,9 +509,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         return sb.ToString();
     }
 
-    private static string EmitPropertyGetSetup(IPropertySymbol p)
+    private static string EmitPropertyGetSetup(IPropertySymbol p, string className)
     {
-        var className = GetMockClassName(p.ContainingType.Name);
         var type = TypeDisplay(p.Type);
         var sb = new StringBuilder();
         sb.AppendLine($"    public {className} SetupGet{p.Name}(Func<{type}> behavior) {{ {GetBehaviorFieldName(p)} = behavior; return this; }}");
@@ -456,18 +529,16 @@ public class InterfaceMockGenerator : ISourceGenerator
         return sb.ToString();
     }
 
-    private static string EmitPropertySetSetup(IPropertySymbol p)
+    private static string EmitPropertySetSetup(IPropertySymbol p, string className)
     {
-        var className = GetMockClassName(p.ContainingType.Name);
         var type = TypeDisplay(p.Type);
         var sb = new StringBuilder();
         sb.AppendLine($"    public {className} SetupSet{p.Name}(Action<{type}> behavior) {{ {SetBehaviorFieldName(p)} = behavior; return this; }}");
         return sb.ToString();
     }
 
-    private static string EmitPropertySetSetupWithMatcher(IPropertySymbol p)
+    private static string EmitPropertySetSetupWithMatcher(IPropertySymbol p, string className)
     {
-        var className = GetMockClassName(p.ContainingType.Name);
         var type = TypeDisplay(p.Type);
         var sb = new StringBuilder();
         sb.AppendLine($"    public {className} SetupSet{p.Name}(Func<{type}, bool> matcher, Action<{type}> behavior)");
@@ -555,5 +626,28 @@ public class InterfaceMockGenerator : ISourceGenerator
         if (type is IArrayTypeSymbol arr)
             return ContainsTypeParameter(arr.ElementType);
         return false;
+    }
+
+    /// <summary>
+    /// Returns a C# expression string that produces a smart default for the given type.
+    /// For collection interfaces (IEnumerable&lt;T&gt;, IList&lt;T&gt;, IReadOnlyList&lt;T&gt;, etc.)
+    /// returns <c>Array.Empty&lt;T&gt;()</c>; otherwise falls back to <c>default(type)!</c>.
+    /// </summary>
+    private static string SmartDefault(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol named && named.IsGenericType && named.TypeArguments.Length == 1)
+        {
+            var defName = named.OriginalDefinition.ToDisplayString();
+            if (defName is "System.Collections.Generic.IEnumerable<T>"
+                       or "System.Collections.Generic.IReadOnlyCollection<T>"
+                       or "System.Collections.Generic.IReadOnlyList<T>"
+                       or "System.Collections.Generic.ICollection<T>"
+                       or "System.Collections.Generic.IList<T>")
+            {
+                var elem = TypeDisplay(named.TypeArguments[0]);
+                return $"Array.Empty<{elem}>()";
+            }
+        }
+        return $"default({TypeDisplay(type)})!";
     }
 }

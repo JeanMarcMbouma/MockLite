@@ -1,6 +1,7 @@
 ﻿// src/MockLite.Core/Core/Mock.cs
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using System.Reflection;
@@ -43,6 +44,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     // Cached default return values to avoid repeated Activator.CreateInstance calls.
     private static readonly ConcurrentDictionary<Type, object?> _defaultValues = new();
 
+    // Per-instance custom default values set via SetReturnsDefault<T>().
+    private readonly Dictionary<Type, object?> _customDefaults = new();
+
     /// <summary>
     /// Intercepts method calls on the proxied interface.
     /// </summary>
@@ -69,9 +73,18 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         if (_signatureBehaviors.TryGetValue(targetMethod!, out var sigInvoker))
             return sigInvoker(args);
 
+        // Check per-instance custom defaults (SetReturnsDefault<T>).
+        if (_customDefaults.TryGetValue(targetMethod!.ReturnType, out var customDefault))
+            return customDefault;
+
         // Return the appropriate default for the method's return type.
         return GetDefault(targetMethod!.ReturnType);
     }
+
+    /// <summary>
+    /// Registers a custom default return value for a specific type.
+    /// </summary>
+    public void SetDefault(Type returnType, object? value) => _customDefaults[returnType] = value;
 
     /// <summary>
     /// Sets up the behavior for a specific method (signature-only, no argument matching).
@@ -189,8 +202,10 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// <summary>
     /// Returns the appropriate default value for <paramref name="t"/>, caching the
     /// result so that <c>Activator.CreateInstance</c> is only called once per type.
+    /// Returns smart defaults: completed tasks for Task/Task&lt;T&gt;, empty collections
+    /// for IEnumerable&lt;T&gt;/IList&lt;T&gt;/IReadOnlyList&lt;T&gt; and related interfaces.
     /// </summary>
-    private static object? GetDefault(Type t)
+    internal static object? GetDefault(Type t)
     {
         return _defaultValues.GetOrAdd(t, static type =>
         {
@@ -211,6 +226,23 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
                     typeof(ValueTask<>).MakeGenericType(tArg),
                     GetDefault(tArg));
             }
+
+            // Smart defaults for collection interfaces – return empty instead of null.
+            if (type.IsGenericType)
+            {
+                var def = type.GetGenericTypeDefinition();
+                if (def == typeof(IEnumerable<>) || def == typeof(IReadOnlyCollection<>) ||
+                    def == typeof(IReadOnlyList<>) || def == typeof(ICollection<>) ||
+                    def == typeof(IList<>))
+                {
+                    // Array.Empty<T>() implements all of these interfaces.
+                    var elem = type.GenericTypeArguments[0];
+                    return typeof(Array).GetMethod(nameof(Array.Empty))!
+                        .MakeGenericMethod(elem)
+                        .Invoke(null, null);
+                }
+            }
+
             return type.IsValueType ? Activator.CreateInstance(type) : null;
         });
     }
