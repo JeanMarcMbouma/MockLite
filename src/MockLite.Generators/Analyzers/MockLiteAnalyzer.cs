@@ -34,8 +34,15 @@ public class MockLiteAnalyzer : DiagnosticAnalyzer
         var symbol = context.SemanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
         if (symbol == null) return;
 
-        // Ignore all analysis on auto-generated code ([GeneratedMock] attribute)
-        if (symbol.ContainingType.GetAttributes().Any(attr =>
+        var containingType = symbol.ContainingType;
+
+        // Skip analysis on Mock<T> runtime API calls — the runtime proxy handles
+        // everything correctly and these diagnostics are meant for generated mocks.
+        if (IsMockRuntimeType(containingType))
+            return;
+
+        // Skip analysis on auto-generated mock types ([GeneratedMock] attribute)
+        if (containingType.GetAttributes().Any(attr =>
             attr.AttributeClass?.Name == "GeneratedMockAttribute"))
         {
             return;
@@ -55,44 +62,59 @@ public class MockLiteAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // ML003: NonVirtualClassMethod
-        if (symbol.ContainingType.TypeKind == TypeKind.Class &&
+        // ML003: NonVirtualClassMethod — only flag when the call target is a
+        // non-virtual method on a concrete class that also implements interfaces
+        // (i.e. the user likely intended to mock through the interface instead).
+        if (containingType.TypeKind == TypeKind.Class &&
             !symbol.IsVirtual && !symbol.IsAbstract &&
-            symbol.DeclaredAccessibility == Accessibility.Public)
+            symbol.DeclaredAccessibility == Accessibility.Public &&
+            containingType.AllInterfaces.Length > 0)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.NonVirtualClassMethod,
-                invocation.GetLocation()));
+            // Only report when the method is declared on a class that implements
+            // interfaces — a strong signal the user should mock the interface.
+            var declaringInterface = containingType.AllInterfaces
+                .FirstOrDefault(i => i.GetMembers(symbol.Name).OfType<IMethodSymbol>().Any());
+            if (declaringInterface != null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.NonVirtualClassMethod,
+                    invocation.GetLocation()));
+            }
         }
 
-        // ML005: AmbiguousOverload
-        var overloads = symbol.ContainingType.GetMembers(symbol.Name)
-            .OfType<IMethodSymbol>().Count();
-        if (overloads > 1 && !name.Contains('_')) // generator adds signature hash
+        // ML005: AmbiguousOverload — only flag on interface method calls where
+        // the interface defines multiple overloads with the same name.
+        if (containingType.TypeKind == TypeKind.Interface)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.AmbiguousOverload,
-                invocation.GetLocation()));
+            var overloads = containingType.GetMembers(symbol.Name)
+                .OfType<IMethodSymbol>().Count();
+            if (overloads > 1)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.AmbiguousOverload,
+                    invocation.GetLocation()));
+            }
         }
 
-        // ML001 + ML004 require flow analysis (simplified here)
-        // ML001: UnusedSetup — detect SetupXxx calls not followed by invocation
-        if (name.StartsWith("Setup"))
-        {
-            // In a real analyzer, track symbol usage across the syntax tree
-            // Here we flag as info for demonstration
-            context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.UnusedSetup,
-                invocation.GetLocation()));
-        }
+        // ML001 + ML004 require full data-flow analysis to track Setup→Invoke and
+        // Setup→Verify pairs across the method body.  Without proper flow analysis
+        // these would produce false positives on every call, so they are left as
+        // no-ops until a proper implementation is added.
+    }
 
-        // ML004: VerifyNonMockedMethod — detect VerifyXxx calls without prior Setup
-        if (name.StartsWith("Verify"))
+    /// <summary>
+    /// Returns true when the type is the MockLite runtime Mock&lt;T&gt; class or its
+    /// nested types (e.g. SetupPhrase).
+    /// </summary>
+    private static bool IsMockRuntimeType(INamedTypeSymbol? type)
+    {
+        while (type != null)
         {
-            // In a real analyzer, track Setup calls; simplified here
-            context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.VerifyNonMockedMethod,
-                invocation.GetLocation()));
+            if (type.Name == "Mock" &&
+                type.ContainingNamespace?.ToDisplayString() == "BbQ.MockLite")
+                return true;
+            type = type.ContainingType;
         }
+        return false;
     }
 }
