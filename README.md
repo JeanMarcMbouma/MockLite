@@ -141,8 +141,8 @@ foreach (var invocation in builder.Invocations)
 
 **Fluent SetSetupPhrase Methods** (returned by `SetupSet(property)`):
 - `.Throws(exception)` - Configure the property setter to throw an exception
-- `.Callback(callback)` - Register a parameterless callback when the setter is called (returns `SetSetupPhrase` for further chaining)
-- `.Callback(callback)` - Register a strongly-typed callback receiving the assigned value (returns `SetSetupPhrase` for further chaining)
+- `.Callback(Action)` - Register a parameterless callback when the setter is called (returns `SetSetupPhrase` for further chaining)
+- `.Callback(Action<TProp>)` - Register a strongly-typed callback receiving the assigned value (returns `SetSetupPhrase` for further chaining)
 
 **Verification Methods:**
 - `Verify<TResult>(expression, times)` - Verify a return-value method was called N times
