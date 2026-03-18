@@ -695,10 +695,16 @@ public sealed class Mock<T> where T : class
     /// <remarks>
     /// This helper parses void lambda expressions (Action) to identify which method is being targeted.
     /// </remarks>
-    private static MethodInfo ExtractVoidMethod(Expression<Action<T>> expr)
+    private static (MethodInfo, object?[]) ExtractVoidMethod(Expression<Action<T>> expr)
     {
         if (expr.Body is MethodCallExpression call)
-            return call.Method;
+        {
+            var callArgs = call.Arguments;
+            var args = new object?[callArgs.Count];
+            for (int i = 0; i < args.Length; i++)
+                args[i] = ExtractArgument(callArgs[i]);
+            return (call.Method, args);
+        }
         throw new ArgumentException("Expression must be a method call");
     }
 
@@ -707,6 +713,40 @@ public sealed class Mock<T> where T : class
         if (expr.Body is MemberExpression member && member.Member is PropertyInfo pi)
             return pi;
         throw new ArgumentException("Expression must be a property access");
+    }
+
+    /// <summary>
+    /// Builds an argument matcher from the extracted expression arguments.
+    /// Returns <c>null</c> when every argument is <see cref="It.IsAny{T}"/>
+    /// (i.e. all-wildcard), so the callback fires unconditionally.
+    /// </summary>
+    private static Func<object?[], bool>? BuildArgMatcher(object?[] args)
+    {
+        if (args.Length == 0) return null;
+
+        var isAny = new bool[args.Length];
+        bool allAny = true;
+        for (int i = 0; i < args.Length; i++)
+        {
+            isAny[i] = args[i] is It.AnyMatcher;
+            if (!isAny[i]) allAny = false;
+        }
+
+        if (allAny) return null;
+
+        // Capture copies for the closure.
+        var matchArgs = (object?[])args.Clone();
+        var matchIsAny = (bool[])isAny.Clone();
+        return invocationArgs =>
+        {
+            if (invocationArgs.Length != matchArgs.Length) return false;
+            for (int i = 0; i < matchArgs.Length; i++)
+            {
+                if (matchIsAny[i]) continue;
+                if (!Equals(matchArgs[i], invocationArgs[i])) return false;
+            }
+            return true;
+        };
     }
 
     private static string FormatVerificationMessage(string baseLine, string? message)
@@ -892,8 +932,8 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall(Expression<Func<T, object?>> expression, Action<object?[]> callback)
     {
-        var (method, _) = ExtractMethod(expression);
-        _proxy.OnInvocation(method, callback);
+        var (method, args) = ExtractMethod(expression);
+        _proxy.OnInvocation(method, BuildArgMatcher(args), callback);
         return this;
     }
 
@@ -947,8 +987,8 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall(Expression<Action<T>> expression, Action<object?[]> callback)
     {
-        var method = ExtractVoidMethod(expression);
-        _proxy.OnInvocation(method, callback);
+        var (method, args) = ExtractVoidMethod(expression);
+        _proxy.OnInvocation(method, BuildArgMatcher(args), callback);
         return this;
     }
 
@@ -974,7 +1014,7 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall(Expression<Action<T>> expression, Func<object?[], bool> matcher, Action<object?[]> callback)
     {
-        var method = ExtractVoidMethod(expression);
+        var (method, _) = ExtractVoidMethod(expression);
         _proxy.OnInvocation(method, matcher, callback);
         return this;
     }
@@ -996,8 +1036,9 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall(Expression<Func<T, object?>> expression, Action handler)
     {
-        var (method, _) = ExtractMethod(expression);
-        _proxy.OnInvocation(method, _ => handler());
+        var (method, args) = ExtractMethod(expression);
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, _ => handler());
         return this;
     }
 
@@ -1019,9 +1060,10 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall<T1>(Expression<Func<T, object?>> expression, Action<T1> handler)
     {
-        var (method, _) = ExtractMethod(expression);
+        var (method, args) = ExtractMethod(expression);
         ValidateAndSetupOnCall(method, new[] { typeof(T1) }, nameof(handler));
-        _proxy.OnInvocation(method, args => handler((T1)args[0]!));
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!));
         return this;
     }
 
@@ -1044,9 +1086,10 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall<T1, T2>(Expression<Func<T, object?>> expression, Action<T1, T2> handler)
     {
-        var (method, _) = ExtractMethod(expression);
+        var (method, args) = ExtractMethod(expression);
         ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2) }, nameof(handler));
-        _proxy.OnInvocation(method, args => handler((T1)args[0]!, (T2)args[1]!));
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!));
         return this;
     }
 
@@ -1071,9 +1114,10 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall<T1, T2, T3>(Expression<Func<T, object?>> expression, Action<T1, T2, T3> handler)
     {
-        var (method, _) = ExtractMethod(expression);
+        var (method, args) = ExtractMethod(expression);
         ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2), typeof(T3) }, nameof(handler));
-        _proxy.OnInvocation(method, args => handler((T1)args[0]!, (T2)args[1]!, (T3)args[2]!));
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!, (T3)a[2]!));
         return this;
     }
 
@@ -1094,8 +1138,9 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall(Expression<Action<T>> expression, Action handler)
     {
-        var method = ExtractVoidMethod(expression);
-        _proxy.OnInvocation(method, _ => handler());
+        var (method, args) = ExtractVoidMethod(expression);
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, _ => handler());
         return this;
     }
 
@@ -1117,9 +1162,10 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall<T1>(Expression<Action<T>> expression, Action<T1> handler)
     {
-        var method = ExtractVoidMethod(expression);
+        var (method, args) = ExtractVoidMethod(expression);
         ValidateAndSetupOnCall(method, new[] { typeof(T1) }, nameof(handler));
-        _proxy.OnInvocation(method, args => handler((T1)args[0]!));
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!));
         return this;
     }
 
@@ -1142,9 +1188,10 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall<T1, T2>(Expression<Action<T>> expression, Action<T1, T2> handler)
     {
-        var method = ExtractVoidMethod(expression);
+        var (method, args) = ExtractVoidMethod(expression);
         ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2) }, nameof(handler));
-        _proxy.OnInvocation(method, args => handler((T1)args[0]!, (T2)args[1]!));
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!));
         return this;
     }
 
@@ -1169,9 +1216,10 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> OnCall<T1, T2, T3>(Expression<Action<T>> expression, Action<T1, T2, T3> handler)
     {
-        var method = ExtractVoidMethod(expression);
+        var (method, args) = ExtractVoidMethod(expression);
         ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2), typeof(T3) }, nameof(handler));
-        _proxy.OnInvocation(method, args => handler((T1)args[0]!, (T2)args[1]!, (T3)args[2]!));
+        var matcher = BuildArgMatcher(args);
+        _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!, (T3)a[2]!));
         return this;
     }
 

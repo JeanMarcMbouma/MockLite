@@ -161,8 +161,10 @@ public class InterfaceMockGenerator : ISourceGenerator
         var properties = GetAllProperties(iface);
 
         // Behavior fields per method overload with signature hash
+        // Skip generic methods — their type parameters are not in scope at class level.
         foreach (var m in methods)
         {
+            if (m.IsGenericMethod) continue;
             var field = BehaviorFieldName(m);
             var delType = BehaviorDelegateType(m);
             sb.AppendLine($"    public {delType}? {field} {{ get; set; }}");
@@ -195,13 +197,18 @@ public class InterfaceMockGenerator : ISourceGenerator
         foreach (var m in methods)
         {
             sb.Append(EmitMethodImplementation(m));
-            sb.Append(EmitMethodSetup(m, className));
-            // Skip matcher overloads for parameterless methods (signatures would be identical).
-            if (m.Parameters.Length > 0)
-                sb.Append(EmitMethodSetupWithMatcher(m, className));
-            sb.Append(EmitMethodReturns(m, className));
+            // Generic methods cannot have class-level typed behavior fields, so skip
+            // Setup/SetupWithMatcher/Returns helpers.  Verify by method name still works.
+            if (!m.IsGenericMethod)
+            {
+                sb.Append(EmitMethodSetup(m, className));
+                // Skip matcher overloads for parameterless methods (signatures would be identical).
+                if (m.Parameters.Length > 0)
+                    sb.Append(EmitMethodSetupWithMatcher(m, className));
+                sb.Append(EmitMethodReturns(m, className));
+            }
             sb.Append(EmitMethodVerify(m));
-            if (m.Parameters.Length > 0)
+            if (m.Parameters.Length > 0 && !m.IsGenericMethod)
                 sb.Append(EmitMethodVerifyWithMatcher(m));
         }
 
@@ -315,45 +322,105 @@ public class InterfaceMockGenerator : ISourceGenerator
         var parmsSig = string.Join(", ", m.Parameters.Select(p => $"{TypeDisplay(p.Type)} {p.Name}"));
         var ret = TypeDisplay(m.ReturnType);
         var argsArray = string.Join(", ", m.Parameters.Select(p => p.Name));
-        var field = BehaviorFieldName(m);
         var miField = MethodInfoFieldName(m);
         var sb = new StringBuilder();
 
-        sb.AppendLine($"    public {ret} {name}({parmsSig})");
+        // Build type parameter clause + constraints for generic methods.
+        var typeParamClause = "";
+        var constraintsClauses = "";
+        if (m.IsGenericMethod)
+        {
+            typeParamClause = "<" + string.Join(", ", m.TypeParameters.Select(tp => tp.Name)) + ">";
+            var constraints = new List<string>();
+            foreach (var tp in m.TypeParameters)
+            {
+                var parts = new List<string>();
+                if (tp.HasReferenceTypeConstraint) parts.Add("class");
+                if (tp.HasValueTypeConstraint) parts.Add("struct");
+                if (tp.HasUnmanagedTypeConstraint) parts.Add("unmanaged");
+                if (tp.HasNotNullConstraint) parts.Add("notnull");
+                foreach (var ct in tp.ConstraintTypes)
+                    parts.Add(TypeDisplay(ct));
+                if (tp.HasConstructorConstraint) parts.Add("new()");
+                if (parts.Count > 0)
+                    constraints.Add($" where {tp.Name} : {string.Join(", ", parts)}");
+            }
+            constraintsClauses = string.Join("", constraints);
+        }
+
+        sb.AppendLine($"    public {ret} {name}{typeParamClause}({parmsSig}){constraintsClauses}");
         sb.AppendLine("    {");
         sb.AppendLine($"        Invocations.Add(new Invocation({miField}, new object[] {{ {argsArray} }}));");
 
-        if (ret == "void")
+        // Generic methods have no class-level behavior field; just return smart defaults.
+        if (m.IsGenericMethod)
         {
-            sb.AppendLine($"        {field}?.Invoke({argsArray});");
-        }
-        else if (ret == "Task")
-        {
-            sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? Task.CompletedTask;");
-        }
-        else if (ret.StartsWith("Task<"))
-        {
-            var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
-            var innerDisplay = TypeDisplay(innerType);
-            var smartDef = SmartDefault(innerType);
-            sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
-            sb.AppendLine($"        return Task.FromResult<{innerDisplay}>({smartDef});");
-        }
-        else if (ret == "ValueTask")
-        {
-            sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? default;");
-        }
-        else if (ret.StartsWith("ValueTask<"))
-        {
-            var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
-            var smartDef = SmartDefault(innerType);
-            sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
-            sb.AppendLine($"        return new ValueTask<{TypeDisplay(innerType)}>({smartDef});");
+            if (ret == "void")
+            {
+                // nothing to return
+            }
+            else if (ret == "Task")
+            {
+                sb.AppendLine("        return Task.CompletedTask;");
+            }
+            else if (ret.StartsWith("Task<"))
+            {
+                var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
+                var innerDisplay = TypeDisplay(innerType);
+                var smartDef = SmartDefault(innerType);
+                sb.AppendLine($"        return Task.FromResult<{innerDisplay}>({smartDef});");
+            }
+            else if (ret == "ValueTask")
+            {
+                sb.AppendLine("        return default;");
+            }
+            else if (ret.StartsWith("ValueTask<"))
+            {
+                var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
+                var smartDef = SmartDefault(innerType);
+                sb.AppendLine($"        return new ValueTask<{TypeDisplay(innerType)}>({smartDef});");
+            }
+            else
+            {
+                var smartDef = SmartDefault(m.ReturnType);
+                sb.AppendLine($"        return {smartDef};");
+            }
         }
         else
         {
-            var smartDef = SmartDefault(m.ReturnType);
-            sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? {smartDef};");
+            var field = BehaviorFieldName(m);
+            if (ret == "void")
+            {
+                sb.AppendLine($"        {field}?.Invoke({argsArray});");
+            }
+            else if (ret == "Task")
+            {
+                sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? Task.CompletedTask;");
+            }
+            else if (ret.StartsWith("Task<"))
+            {
+                var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
+                var innerDisplay = TypeDisplay(innerType);
+                var smartDef = SmartDefault(innerType);
+                sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
+                sb.AppendLine($"        return Task.FromResult<{innerDisplay}>({smartDef});");
+            }
+            else if (ret == "ValueTask")
+            {
+                sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? default;");
+            }
+            else if (ret.StartsWith("ValueTask<"))
+            {
+                var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
+                var smartDef = SmartDefault(innerType);
+                sb.AppendLine($"        if ({field} != null) return {field}({argsArray});");
+                sb.AppendLine($"        return new ValueTask<{TypeDisplay(innerType)}>({smartDef});");
+            }
+            else
+            {
+                var smartDef = SmartDefault(m.ReturnType);
+                sb.AppendLine($"        return {field}?.Invoke({argsArray}) ?? {smartDef};");
+            }
         }
 
         sb.AppendLine("    }");
@@ -613,7 +680,16 @@ public class InterfaceMockGenerator : ISourceGenerator
             return $"    private static readonly MethodInfo {fieldName} = typeof({iface}).GetMethod(\"{m.Name}\", {types})!;\n";
         }
 
-        // Generic interface or method – fall back to name-only GetMethod.
+        // For generic methods, filter by generic arity to avoid AmbiguousMatchException
+        // when same-named overloads exist with different arities.
+        if (m.IsGenericMethod)
+        {
+            var arity = m.TypeParameters.Length;
+            var paramCount = m.Parameters.Length;
+            return $"    private static readonly MethodInfo {fieldName} = typeof({iface}).GetMethods().First(m => m.Name == \"{m.Name}\" && m.IsGenericMethodDefinition && m.GetGenericArguments().Length == {arity} && m.GetParameters().Length == {paramCount});\n";
+        }
+
+        // Generic interface – fall back to name-only GetMethod.
         return $"    private static readonly MethodInfo {fieldName} = typeof({iface}).GetMethod(\"{m.Name}\")!;\n";
     }
 
