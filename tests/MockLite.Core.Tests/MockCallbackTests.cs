@@ -647,4 +647,125 @@ public class MockCallbackTests
     {
         T Get<T>(string key);
     }
+
+    // ==================== ONCALL ARGUMENT MATCHING TESTS ====================
+
+    [Fact]
+    public void Test_OnCall_MultipleRegistrations_MatchesByArgumentValue()
+    {
+        // Arrange
+        var key1Calls = 0;
+        var key2Calls = 0;
+        var builder = Mock.Create<ITestService>();
+
+        builder
+            .OnCall(x => x.GetValue("key1"), args => key1Calls++)
+            .OnCall(x => x.GetValue("key2"), args => key2Calls++);
+
+        var mock = builder.Object;
+
+        // Act
+        mock.GetValue("key1");
+        mock.GetValue("key2");
+        mock.GetValue("key3"); // should match neither
+
+        // Assert
+        Assert.Equal(1, key1Calls);
+        Assert.Equal(1, key2Calls);
+    }
+
+    [Fact]
+    public void Test_OnCall_IsAny_StillMatchesAll()
+    {
+        // Arrange: OnCall with It.IsAny should match all calls (backward compat)
+        var callCount = 0;
+        var builder = Mock.Create<ITestService>();
+        builder.OnCall(x => x.GetValue(It.IsAny<string>()), args => callCount++);
+
+        var mock = builder.Object;
+
+        // Act
+        mock.GetValue("a");
+        mock.GetValue("b");
+
+        // Assert
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact]
+    public void Test_OnCall_MixedIsAnyAndSpecific()
+    {
+        // Arrange: One specific, one wildcard
+        var specificCalls = 0;
+        var allCalls = 0;
+        var builder = Mock.Create<ITestService>();
+
+        builder
+            .OnCall(x => x.GetValue("admin"), args => specificCalls++)
+            .OnCall(x => x.GetValue(It.IsAny<string>()), args => allCalls++);
+
+        var mock = builder.Object;
+
+        // Act
+        mock.GetValue("admin"); // matches both
+        mock.GetValue("user");  // matches only wildcard
+
+        // Assert
+        Assert.Equal(1, specificCalls);
+        Assert.Equal(2, allCalls);
+    }
+
+    [Fact]
+    public void Test_OnCall_VoidMethod_MatchesByArgumentValue()
+    {
+        // Arrange: void method with specific argument matching
+        var doCount = 0;
+        var builder = Mock.Create<ITestService>();
+        builder.OnCall(x => x.DoSomething(), args => doCount++);
+
+        var mock = builder.Object;
+
+        // Act
+        mock.DoSomething();
+
+        // Assert
+        Assert.Equal(1, doCount);
+    }
+
+    [Fact]
+    public void Test_OnCall_StronglyTyped_MatchesByArgumentValue()
+    {
+        // Arrange: strongly-typed OnCall with specific argument
+        var captured = new List<string>();
+        var builder = Mock.Create<ITestService>();
+        builder.OnCall<string>(x => x.GetValue("target"), key => captured.Add(key));
+
+        var mock = builder.Object;
+
+        // Act
+        mock.GetValue("target");
+        mock.GetValue("other");
+
+        // Assert
+        Assert.Single(captured);
+        Assert.Equal("target", captured[0]);
+    }
+
+    [Fact]
+    public void Test_OnCall_ParameterlessHandler_MatchesByArgumentValue()
+    {
+        // Arrange
+        var count = 0;
+        var builder = Mock.Create<ITestService>();
+        builder.OnCall(x => x.GetNumber(42), () => count++);
+
+        var mock = builder.Object;
+
+        // Act
+        mock.GetNumber(42);  // matches
+        mock.GetNumber(99);  // does not match
+
+        // Assert
+        Assert.Equal(1, count);
+    }
 }
