@@ -59,7 +59,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         ExecuteCallbacks(targetMethod!, args);
 
         // Try arg-specific behaviors first (supports exact and IsAny matching).
-        if (_argBehaviors.TryGetValue(targetMethod!, out var argList))
+        if (!_argBehaviors.TryGetValue(targetMethod!, out var argList) && targetMethod!.IsGenericMethod)
+            argList = FindGenericWildcard(_argBehaviors, targetMethod);
+        if (argList != null)
         {
             for (int i = 0; i < argList.Count; i++)
             {
@@ -70,7 +72,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         }
 
         // Fall back to signature-only behavior.
-        if (_signatureBehaviors.TryGetValue(targetMethod!, out var sigInvoker))
+        if (!_signatureBehaviors.TryGetValue(targetMethod!, out var sigInvoker) && targetMethod!.IsGenericMethod)
+            sigInvoker = FindGenericWildcard(_signatureBehaviors, targetMethod);
+        if (sigInvoker != null)
             return sigInvoker(args);
 
         // Check per-instance custom defaults (SetReturnsDefault<T>).
@@ -131,7 +135,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// </summary>
     private void ExecuteCallbacks(MethodInfo method, object?[] args)
     {
-        if (_callbacks.TryGetValue(method, out var callbackList))
+        if (!_callbacks.TryGetValue(method, out var callbackList) && method.IsGenericMethod)
+            callbackList = FindGenericWildcard(_callbacks, method);
+        if (callbackList != null)
         {
             foreach (var (matcher, callback) in callbackList)
             {
@@ -245,6 +251,45 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
 
             return type.IsValueType ? Activator.CreateInstance(type) : null;
         });
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="setupMethod"/> is a generic wildcard match
+    /// for <paramref name="targetMethod"/>: both share the same generic method definition
+    /// and every type argument in <paramref name="setupMethod"/> is either <c>typeof(object)</c>
+    /// (wildcard) or identical to the corresponding type argument in <paramref name="targetMethod"/>.
+    /// </summary>
+    private static bool IsGenericWildcardMatch(MethodInfo setupMethod, MethodInfo targetMethod)
+    {
+        if (!setupMethod.IsGenericMethod || !targetMethod.IsGenericMethod) return false;
+        if (setupMethod.GetGenericMethodDefinition().MethodHandle !=
+            targetMethod.GetGenericMethodDefinition().MethodHandle)
+            return false;
+
+        var setupArgs = setupMethod.GetGenericArguments();
+        var targetArgs = targetMethod.GetGenericArguments();
+        for (int i = 0; i < setupArgs.Length; i++)
+        {
+            if (setupArgs[i] != typeof(object) && setupArgs[i] != targetArgs[i])
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Scans <paramref name="dict"/> for a key that is a generic wildcard match for
+    /// <paramref name="target"/>. Only called when an exact <c>TryGetValue</c> has
+    /// already failed and <paramref name="target"/> is a generic method.
+    /// </summary>
+    private static TValue? FindGenericWildcard<TValue>(Dictionary<MethodInfo, TValue> dict, MethodInfo target)
+        where TValue : class
+    {
+        foreach (var kvp in dict)
+        {
+            if (IsGenericWildcardMatch(kvp.Key, target))
+                return kvp.Value;
+        }
+        return null;
     }
 
     /// <summary>

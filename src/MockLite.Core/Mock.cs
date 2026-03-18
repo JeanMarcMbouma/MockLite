@@ -380,7 +380,7 @@ public sealed class Mock<T> where T : class
         var invocations = _proxy.Invocations;
         for (int i = 0; i < invocations.Count; i++)
         {
-            if (invocations[i].Method == method)
+            if (GenericMethodMatches(invocations[i].Method, method))
                 count++;
         }
         if (!times(count))
@@ -419,7 +419,7 @@ public sealed class Mock<T> where T : class
         for (int i = 0; i < invocations.Count; i++)
         {
             var inv = invocations[i];
-            if (inv.Method == method && matcher(inv.Arguments))
+            if (GenericMethodMatches(inv.Method, method) && matcher(inv.Arguments))
                 count++;
         }
         if (!times(count))
@@ -711,6 +711,30 @@ public sealed class Mock<T> where T : class
 
     private static string FormatVerificationMessage(string baseLine, string? message)
         => string.IsNullOrWhiteSpace(message) ? baseLine : $"{baseLine} {message}";
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="recorded"/> matches <paramref name="expected"/>,
+    /// treating <c>typeof(object)</c> as a wildcard for each generic type argument position.
+    /// This allows <c>Verify(x =&gt; x.Query&lt;object&gt;(...))</c> to match an actual call to
+    /// <c>Query&lt;PrivateType&gt;(...)</c> where <c>PrivateType</c> is inaccessible to the test.
+    /// </summary>
+    private static bool GenericMethodMatches(MethodInfo recorded, MethodInfo expected)
+    {
+        if (recorded == expected) return true;
+        if (!expected.IsGenericMethod || !recorded.IsGenericMethod) return false;
+        if (expected.GetGenericMethodDefinition().MethodHandle !=
+            recorded.GetGenericMethodDefinition().MethodHandle)
+            return false;
+
+        var expectedArgs = expected.GetGenericArguments();
+        var recordedArgs = recorded.GetGenericArguments();
+        for (int i = 0; i < expectedArgs.Length; i++)
+        {
+            if (expectedArgs[i] != typeof(object) && expectedArgs[i] != recordedArgs[i])
+                return false;
+        }
+        return true;
+    }
 
     /// <summary>
     /// Creates a delegate that wraps a partial handler, extracting only the needed parameters from the method signature.
@@ -1426,7 +1450,7 @@ public sealed class Mock<T> where T : class
         var invocations = _proxy.Invocations;
         for (int i = 0; i < invocations.Count; i++)
         {
-            if (invocations[i].Method == method)
+            if (GenericMethodMatches(invocations[i].Method, method))
                 count++;
         }
         if (!times(count))
