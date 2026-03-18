@@ -151,6 +151,77 @@ public sealed class Mock<T> where T : class
             _mock._proxy.Setup(_method, _args, new Func<TResult>(() => throw exception));
             return _mock;
         }
+
+        // --- Callback Methods ---
+
+        /// <summary>
+        /// Registers a parameterless callback that executes whenever the method is called.
+        /// Returns the setup phrase so you can continue chaining <c>.Returns()</c> etc.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// var called = false;
+        /// mock.Setup(x => x.GetValue("key"))
+        ///     .Callback(() => called = true)
+        ///     .Returns("value");
+        /// </code>
+        /// </example>
+        public SetupPhrase<TResult> Callback(Action callback)
+        {
+            _mock._proxy.OnInvocation(_method, _ => callback());
+            return this;
+        }
+
+        /// <summary>
+        /// Registers a callback that receives the raw arguments array whenever the method is called.
+        /// Returns the setup phrase so you can continue chaining <c>.Returns()</c> etc.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// var captured = new List&lt;object?[]&gt;();
+        /// mock.Setup(x => x.GetValue(It.IsAny&lt;string&gt;()))
+        ///     .Callback((object?[] args) => captured.Add(args))
+        ///     .Returns("value");
+        /// </code>
+        /// </example>
+        public SetupPhrase<TResult> Callback(Action<object?[]> callback)
+        {
+            _mock._proxy.OnInvocation(_method, callback);
+            return this;
+        }
+
+        /// <summary>
+        /// Registers a strongly-typed callback that receives the first method parameter.
+        /// Returns the setup phrase so you can continue chaining.
+        /// </summary>
+        public SetupPhrase<TResult> Callback<T1>(Action<T1> callback)
+        {
+            ValidateAndSetupOnCall(_method, new[] { typeof(T1) }, nameof(callback));
+            _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!));
+            return this;
+        }
+
+        /// <summary>
+        /// Registers a strongly-typed callback that receives the first two method parameters.
+        /// Returns the setup phrase so you can continue chaining.
+        /// </summary>
+        public SetupPhrase<TResult> Callback<T1, T2>(Action<T1, T2> callback)
+        {
+            ValidateAndSetupOnCall(_method, new[] { typeof(T1), typeof(T2) }, nameof(callback));
+            _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!, (T2)args[1]!));
+            return this;
+        }
+
+        /// <summary>
+        /// Registers a strongly-typed callback that receives the first three method parameters.
+        /// Returns the setup phrase so you can continue chaining.
+        /// </summary>
+        public SetupPhrase<TResult> Callback<T1, T2, T3>(Action<T1, T2, T3> callback)
+        {
+            ValidateAndSetupOnCall(_method, new[] { typeof(T1), typeof(T2), typeof(T3) }, nameof(callback));
+            _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!, (T2)args[1]!, (T3)args[2]!));
+            return this;
+        }
     }
 
     // --- SetReturnsDefault ---
