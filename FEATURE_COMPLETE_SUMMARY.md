@@ -23,8 +23,10 @@ High-level overview of all BbQ.MockLite features.
 | `Setup<TResult,T1,T2>(expr, ...)` | Return value computed from the first two arguments. |
 | `Setup<TResult,T1,T2,T3>(expr, ...)` | Return value computed from the first three arguments. |
 | `SetupGet(prop, Func<TProp>)` | Configure a property getter. |
+| `SetupGet(prop)` | Begin a fluent setup returning `GetSetupPhrase<TProp>` for `.Callback()`, `.Returns()`, `.Throws()` chaining. |
 | `ReturnsGet(prop, value)` | Shorthand for a constant property getter. |
 | `SetupSet(prop, Action<TProp>)` | Configure a property setter. |
+| `SetupSet(prop)` | Begin a fluent setup returning `SetSetupPhrase<TProp>` for `.Callback()`, `.Throws()` chaining. |
 | `SetupSequence(expr, values)` | Return successive values on each call; last value repeats. |
 | `Throws(expr, exception)` | Throw an exception when a return-value method is called. |
 | `Throws(voidExpr, exception)` | Throw an exception when a void method is called. |
@@ -46,6 +48,29 @@ Returned by `Setup(expression)`, the `SetupPhrase<TResult>` struct supports:
 | `.Callback<T1>(Action<T1>)` | `SetupPhrase` | Strongly-typed callback for first parameter (chainable). |
 | `.Callback<T1,T2>(Action<T1,T2>)` | `SetupPhrase` | Strongly-typed callback for first two parameters (chainable). |
 | `.Callback<T1,T2,T3>(Action<T1,T2,T3>)` | `SetupPhrase` | Strongly-typed callback for first three parameters (chainable). |
+
+---
+
+## GetSetupPhrase (Fluent Property Getter Setup)
+
+Returned by `SetupGet(property)`, the `GetSetupPhrase<TProp>` struct supports:
+
+| API | Returns | Description |
+|---|---|---|
+| `.Returns(value)` | `Mock<T>` | Configure a constant return value for the getter. |
+| `.Returns(Func<TProp>)` | `Mock<T>` | Configure a factory-based return value for the getter. |
+| `.Throws(exception)` | `Mock<T>` | Configure the getter to throw. |
+| `.Callback(Action)` | `GetSetupPhrase` | Parameterless callback on getter access (chainable). |
+
+## SetSetupPhrase (Fluent Property Setter Setup)
+
+Returned by `SetupSet(property)`, the `SetSetupPhrase<TProp>` struct supports:
+
+| API | Returns | Description |
+|---|---|---|
+| `.Throws(exception)` | `Mock<T>` | Configure the setter to throw. |
+| `.Callback(Action)` | `SetSetupPhrase` | Parameterless callback on setter call (chainable). |
+| `.Callback(Action<TProp>)` | `SetSetupPhrase` | Typed callback receiving the assigned value (chainable). |
 
 ---
 

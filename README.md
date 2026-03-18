@@ -73,6 +73,12 @@ builder
     .ReturnsGet(x => x.Count, 42)
     .SetupSet(x => x.Name, (value) => { /* handle set */ });
 
+// Or use the fluent property setup API
+builder
+    .SetupGet(x => x.IsActive).Returns(true)
+    .SetupGet(x => x.Count).Returns(42)
+    .SetupSet<string>(x => x.Name).Callback(value => { /* handle set */ });
+
 // Get the configured mock instance
 var mock = builder.Object;
 
@@ -108,8 +114,10 @@ foreach (var invocation in builder.Invocations)
 - `Setup<TResult, T1, T2>(expression, handler)` - Configure with handler receiving first two parameters
 - `Setup<TResult, T1, T2, T3>(expression, handler)` - Configure with handler receiving first three parameters
 - `SetupGet<TProp>(property, getter)` - Setup property getter behavior
+- `SetupGet<TProp>(property)` - Begin a fluent setup returning `GetSetupPhrase<TProp>` for chaining `.Callback()`, `.Returns()`, or `.Throws()`
 - `ReturnsGet<TProp>(property, value)` - Convenience method for constant property values
 - `SetupSet<TProp>(property, setter)` - Setup property setter behavior
+- `SetupSet<TProp>(property)` - Begin a fluent setup returning `SetSetupPhrase<TProp>` for chaining `.Callback()` or `.Throws()`
 - `SetupSequence<TResult>(expression, values)` - Return different values on successive calls (last value repeats)
 - `Throws<TResult>(expression, exception)` - Throw an exception when a return-value method is called
 - `Throws(expression, exception)` - Throw an exception when a void method is called
@@ -124,6 +132,17 @@ foreach (var invocation in builder.Invocations)
 - `.Callback<T1>(callback)` - Register a strongly-typed callback for the first parameter
 - `.Callback<T1, T2>(callback)` - Register a strongly-typed callback for the first two parameters
 - `.Callback<T1, T2, T3>(callback)` - Register a strongly-typed callback for the first three parameters
+
+**Fluent GetSetupPhrase Methods** (returned by `SetupGet(property)`):
+- `.Returns(value)` - Configure a constant return value for the property getter
+- `.Returns(factory)` - Configure a factory-based return value for the property getter
+- `.Throws(exception)` - Configure the property getter to throw an exception
+- `.Callback(callback)` - Register a parameterless callback when the getter is accessed (returns `GetSetupPhrase` for further chaining)
+
+**Fluent SetSetupPhrase Methods** (returned by `SetupSet(property)`):
+- `.Throws(exception)` - Configure the property setter to throw an exception
+- `.Callback(callback)` - Register a parameterless callback when the setter is called (returns `SetSetupPhrase` for further chaining)
+- `.Callback(callback)` - Register a strongly-typed callback receiving the assigned value (returns `SetSetupPhrase` for further chaining)
 
 **Verification Methods:**
 - `Verify<TResult>(expression, times)` - Verify a return-value method was called N times
@@ -263,6 +282,66 @@ builder.Setup(x => x.GetUser("bad-id"))
 | `.Callback<T1,T2,T3>(Action<T1,T2,T3>)` | Strongly-typed first three parameters | `SetupPhrase` (chainable) |
 
 All `Callback` methods return the `SetupPhrase`, so you can chain further with `.Returns()`, `.ReturnsAsync()`, or `.Throws()`. The terminal methods (`.Returns()`, `.ReturnsAsync()`, `.Throws()`) return `Mock<T>` so you can continue configuring the builder.
+
+## Fluent Property Setup
+
+BbQ.MockLite supports Moq-style fluent property setup through `SetupGet` and `SetupSet` phrases. These allow chaining `.Returns()`, `.Callback()`, and `.Throws()` for property accessors:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<IPropertyService>();
+
+// Fluent getter setup with Returns
+builder.SetupGet(x => x.Name).Returns("John");
+
+// Fluent getter setup with factory
+builder.SetupGet(x => x.Count).Returns(() => DateTime.Now.Second);
+
+// Fluent getter setup with Callback then Returns
+var getLog = new List<string>();
+builder.SetupGet(x => x.Name)
+    .Callback(() => getLog.Add("Name accessed"))
+    .Returns("John");
+
+// Fluent getter setup with Throws
+builder.SetupGet(x => x.Name).Throws(new InvalidOperationException("not ready"));
+
+// Fluent setter setup with typed Callback
+var setLog = new List<string>();
+builder.SetupSet<string>(x => x.Name)
+    .Callback(value => setLog.Add($"Name set to: {value}"));
+
+// Fluent setter setup with Throws
+builder.SetupSet<string>(x => x.Name)
+    .Throws(new InvalidOperationException("read-only property"));
+
+// Chain getter and setter setup together
+builder
+    .SetupGet(x => x.Name)
+        .Callback(() => getLog.Add("read"))
+        .Returns("test")
+    .SetupSet<string>(x => x.Name)
+        .Callback(v => setLog.Add($"wrote: {v}"))
+        .Throws(new NotSupportedException());
+```
+
+### Available Methods on GetSetupPhrase
+
+| Method | Description | Returns |
+|---|---|---|
+| `.Returns(value)` | Constant return value | `Mock<T>` (terminal) |
+| `.Returns(factory)` | Factory-based return value | `Mock<T>` (terminal) |
+| `.Throws(exception)` | Throw on getter access | `Mock<T>` (terminal) |
+| `.Callback(Action)` | Parameterless callback | `GetSetupPhrase` (chainable) |
+
+### Available Methods on SetSetupPhrase
+
+| Method | Description | Returns |
+|---|---|---|
+| `.Throws(exception)` | Throw on setter call | `Mock<T>` (terminal) |
+| `.Callback(Action)` | Parameterless callback | `SetSetupPhrase` (chainable) |
+| `.Callback(Action<TProp>)` | Typed callback with assigned value | `SetSetupPhrase` (chainable) |
 
 ## Callbacks for Custom Logic Execution
 
@@ -671,7 +750,7 @@ For detailed documentation on callbacks and advanced features, see:
 
 ## Requirements
 
-- .NET 8.0 or later
+- .NET 8.0 / .NET 10.0 or later
 - C# 14 or later
 
 ## License

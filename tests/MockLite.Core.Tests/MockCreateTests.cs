@@ -485,6 +485,143 @@ public class MockCreateTests
         Assert.Same(builder, result);
     }
 
+    // ==================== PROPERTY SETUP PHRASE TESTS ====================
+
+    [Fact]
+    public void Test_SetupGet_Phrase_Returns_ConfiguresGetter()
+    {
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupGet(x => x.Name).Returns("PhraseValue");
+        var mock = builder.Object;
+
+        Assert.Equal("PhraseValue", mock.Name);
+    }
+
+    [Fact]
+    public void Test_SetupGet_Phrase_ReturnsFactory_ConfiguresGetter()
+    {
+        var counter = 0;
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupGet(x => x.Name).Returns(() => $"Call{++counter}");
+        var mock = builder.Object;
+
+        Assert.Equal("Call1", mock.Name);
+        Assert.Equal("Call2", mock.Name);
+    }
+
+    [Fact]
+    public void Test_SetupGet_Phrase_Throws_ConfiguresGetter()
+    {
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupGet(x => x.Name).Throws(new InvalidOperationException("oops"));
+        var mock = builder.Object;
+
+        Assert.Throws<InvalidOperationException>(() => mock.Name);
+    }
+
+    [Fact]
+    public void Test_SetupGet_Phrase_Callback_Then_Returns()
+    {
+        var called = false;
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupGet(x => x.Name)
+            .Callback(() => called = true)
+            .Returns("WithCallback");
+        var mock = builder.Object;
+
+        Assert.Equal("WithCallback", mock.Name);
+        Assert.True(called);
+    }
+
+    [Fact]
+    public void Test_SetupGet_Phrase_Returns_ReturnsMock()
+    {
+        var builder = Mock.Create<IPropertyService>();
+        var result = builder.SetupGet(x => x.Name).Returns("test");
+
+        Assert.Same(builder, result);
+    }
+
+    [Fact]
+    public void Test_SetupSet_Phrase_Callback_Action()
+    {
+        var captured = string.Empty;
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupSet<string>(x => x.Name).Callback(v => captured = v);
+        var mock = builder.Object;
+
+        mock.Name = "Hello";
+
+        Assert.Equal("Hello", captured);
+    }
+
+    [Fact]
+    public void Test_SetupSet_Phrase_Callback_Parameterless()
+    {
+        var called = false;
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupSet<string>(x => x.Name).Callback(() => called = true);
+        var mock = builder.Object;
+
+        mock.Name = "value";
+
+        Assert.True(called);
+    }
+
+    [Fact]
+    public void Test_SetupSet_Phrase_Throws()
+    {
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupSet<string>(x => x.Name).Throws(new InvalidOperationException("read-only"));
+        var mock = builder.Object;
+
+        Assert.Throws<InvalidOperationException>(() => mock.Name = "value");
+    }
+
+    [Fact]
+    public void Test_SetupSet_Phrase_Throws_ReturnsMock()
+    {
+        var builder = Mock.Create<IPropertyService>();
+        var result = builder.SetupSet<string>(x => x.Name).Throws(new InvalidOperationException("test"));
+
+        Assert.Same(builder, result);
+    }
+
+    [Fact]
+    public void Test_SetupGet_Phrase_Fluent_Chain()
+    {
+        var log = new List<string>();
+        var builder = Mock.Create<IPropertyService>();
+        builder
+            .SetupGet(x => x.Name)
+                .Callback(() => log.Add("getter"))
+                .Returns("fluent")
+            .SetupGet(x => x.Count)
+                .Returns(42);
+        var mock = builder.Object;
+
+        Assert.Equal("fluent", mock.Name);
+        Assert.Equal(42, mock.Count);
+        Assert.Single(log);
+    }
+
+    [Fact]
+    public void Test_SetupSet_Phrase_Callback_Chain()
+    {
+        var log = new List<string>();
+        var builder = Mock.Create<IPropertyService>();
+        builder.SetupSet<string>(x => x.Name)
+            .Callback(() => log.Add("setter-called"))
+            .Callback(v => log.Add($"setter-value:{v}"));
+        var mock = builder.Object;
+
+        mock.Name = "test";
+
+        Assert.Equal(2, log.Count);
+        Assert.Contains("setter-called", log);
+        Assert.Contains("setter-value:test", log);
+    }
+
     // ==================== VERIFICATION TESTS ====================
 
     [Fact]
