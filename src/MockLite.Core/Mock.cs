@@ -310,7 +310,7 @@ public sealed class Mock<T> where T : class
         if (!times(count))
         {
             var line = $"Verification failed for {method.Name}. Actual calls: {count}";
-            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+            throw new VerificationException(FormatVerificationMessage(line, message));
         }
     }
 
@@ -349,7 +349,7 @@ public sealed class Mock<T> where T : class
         if (!times(count))
         {
             var line = $"Verification failed for {method.Name} with matcher. Actual calls: {count}";
-            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+            throw new VerificationException(FormatVerificationMessage(line, message));
         }
     }
 
@@ -456,7 +456,7 @@ public sealed class Mock<T> where T : class
         if (!times(count))
         {
             var line = $"Verification failed for get_{pi.Name}. Actual calls: {count}";
-            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+            throw new VerificationException(FormatVerificationMessage(line, message));
         }
     }
 
@@ -490,7 +490,7 @@ public sealed class Mock<T> where T : class
         if (!times(count))
         {
             var line = $"Verification failed for set_{pi.Name}. Actual calls: {count}";
-            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+            throw new VerificationException(FormatVerificationMessage(line, message));
         }
     }
 
@@ -526,7 +526,7 @@ public sealed class Mock<T> where T : class
         if (!times(count))
         {
             var line = $"Verification failed for set_{pi.Name} with matcher. Actual calls: {count}";
-            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+            throw new VerificationException(FormatVerificationMessage(line, message));
         }
     }
 
@@ -632,6 +632,9 @@ public sealed class Mock<T> where T : class
             return pi;
         throw new ArgumentException("Expression must be a property access");
     }
+
+    private static string FormatVerificationMessage(string baseLine, string? message)
+        => string.IsNullOrWhiteSpace(message) ? baseLine : $"{baseLine} {message}";
 
     /// <summary>
     /// Creates a delegate that wraps a partial handler, extracting only the needed parameters from the method signature.
@@ -1353,7 +1356,7 @@ public sealed class Mock<T> where T : class
         if (!times(count))
         {
             var line = $"Verification failed for {method.Name}. Actual calls: {count}";
-            throw new VerificationException(string.IsNullOrWhiteSpace(message) ? line : $"{line} {message}");
+            throw new VerificationException(FormatVerificationMessage(line, message));
         }
     }
 }

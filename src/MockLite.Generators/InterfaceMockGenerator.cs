@@ -88,7 +88,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         foreach (var m in iface.GetMembers().OfType<IMethodSymbol>()
             .Where(m => m.MethodKind == MethodKind.Ordinary))
         {
-            if (seen.Add(SignatureHash(m)))
+            var hash = SignatureHash(m);
+            if (seen.Add(hash))
                 result.Add(m);
         }
 
@@ -97,7 +98,8 @@ public class InterfaceMockGenerator : ISourceGenerator
             foreach (var m in baseIface.GetMembers().OfType<IMethodSymbol>()
                 .Where(m => m.MethodKind == MethodKind.Ordinary))
             {
-                if (seen.Add(SignatureHash(m)))
+                var hash = SignatureHash(m);
+                if (seen.Add(hash))
                     result.Add(m);
             }
         }
