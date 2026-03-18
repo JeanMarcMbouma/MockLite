@@ -103,6 +103,7 @@ foreach (var invocation in builder.Invocations)
 
 **Setup Methods:**
 - `Setup<TResult>(expression, behavior)` - Configure method return values
+- `Setup<TResult>(expression)` - Begin a fluent setup returning `SetupPhrase<TResult>` for chaining `.Callback()`, `.Returns()`, `.ReturnsAsync()`, or `.Throws()`
 - `Setup<TResult, T1>(expression, handler)` - Configure with strongly-typed handler receiving first parameter
 - `Setup<TResult, T1, T2>(expression, handler)` - Configure with handler receiving first two parameters
 - `Setup<TResult, T1, T2, T3>(expression, handler)` - Configure with handler receiving first three parameters
@@ -112,6 +113,17 @@ foreach (var invocation in builder.Invocations)
 - `SetupSequence<TResult>(expression, values)` - Return different values on successive calls (last value repeats)
 - `Throws<TResult>(expression, exception)` - Throw an exception when a return-value method is called
 - `Throws(expression, exception)` - Throw an exception when a void method is called
+
+**Fluent SetupPhrase Methods** (returned by `Setup(expression)`):
+- `.Returns(value)` - Configure a constant return value
+- `.Returns(factory)` - Configure a factory-based return value
+- `.ReturnsAsync<TInner>(value)` - Configure a `Task<T>` return with covariance support
+- `.Throws(exception)` - Configure the method to throw an exception
+- `.Callback(callback)` - Register a parameterless callback (returns `SetupPhrase` for further chaining)
+- `.Callback(callback)` - Register a callback receiving the raw `object?[]` arguments
+- `.Callback<T1>(callback)` - Register a strongly-typed callback for the first parameter
+- `.Callback<T1, T2>(callback)` - Register a strongly-typed callback for the first two parameters
+- `.Callback<T1, T2, T3>(callback)` - Register a strongly-typed callback for the first three parameters
 
 **Verification Methods:**
 - `Verify<TResult>(expression, times)` - Verify a return-value method was called N times
@@ -203,6 +215,54 @@ builder.OnCall(x => x.DeleteUser(It.IsAny<string>(), It.IsAny<bool>()),
 - **Clean Code**: Only handle the parameters you care about, ignore the rest
 - **IntelliSense Support**: Full IDE support with parameter names and types
 - **Flexible**: Works with methods that have any number of parameters
+
+## Moq-Style Fluent Setup with Callback
+
+BbQ.MockLite supports the familiar Moq-style `Setup(...).Callback(...).Returns(...)` chaining pattern. The `Callback` methods on `SetupPhrase` let you register side-effect logic inline with your setup, and then continue chaining to configure a return value:
+
+```csharp
+using BbQ.MockLite;
+
+var builder = Mock.Create<IUserRepository>();
+var callLog = new List<string>();
+
+// Parameterless callback — track that the method was called
+builder.Setup(x => x.GetUser("123"))
+    .Callback(() => callLog.Add("GetUser called"))
+    .Returns(new User { Id = "123", Name = "John Doe" });
+
+// Strongly-typed callback — capture the argument
+builder.Setup(x => x.GetUser(It.IsAny<string>()))
+    .Callback<string>(id => callLog.Add($"GetUser({id})"))
+    .Returns(new User { Id = "default" });
+
+// Raw argument array callback
+builder.Setup(x => x.GetUser(It.IsAny<string>()))
+    .Callback((object?[] args) => callLog.Add($"args: {args[0]}"))
+    .Returns(new User { Id = "captured" });
+
+// Callback with ReturnsAsync for async methods
+builder.Setup(x => x.GetUserAsync("123"))
+    .Callback(() => callLog.Add("async call"))
+    .ReturnsAsync(new User { Id = "123" });
+
+// Callback with Throws
+builder.Setup(x => x.GetUser("bad-id"))
+    .Callback(() => callLog.Add("error path"))
+    .Throws(new KeyNotFoundException("User not found"));
+```
+
+### Available Callback Overloads on SetupPhrase
+
+| Method | Description | Returns |
+|---|---|---|
+| `.Callback(Action)` | Parameterless callback | `SetupPhrase` (chainable) |
+| `.Callback(Action<object?[]>)` | Raw argument array callback | `SetupPhrase` (chainable) |
+| `.Callback<T1>(Action<T1>)` | Strongly-typed first parameter | `SetupPhrase` (chainable) |
+| `.Callback<T1,T2>(Action<T1,T2>)` | Strongly-typed first two parameters | `SetupPhrase` (chainable) |
+| `.Callback<T1,T2,T3>(Action<T1,T2,T3>)` | Strongly-typed first three parameters | `SetupPhrase` (chainable) |
+
+All `Callback` methods return the `SetupPhrase`, so you can chain further with `.Returns()`, `.ReturnsAsync()`, or `.Throws()`. The terminal methods (`.Returns()`, `.ReturnsAsync()`, `.Throws()`) return `Mock<T>` so you can continue configuring the builder.
 
 ## Callbacks for Custom Logic Execution
 

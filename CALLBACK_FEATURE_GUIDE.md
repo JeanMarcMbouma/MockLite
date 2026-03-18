@@ -134,6 +134,78 @@ var user = builder.Object.GetUser("42");
 
 ---
 
+## Moq-Style SetupPhrase Callbacks
+
+The fluent `Setup(expression)` overload returns a `SetupPhrase<TResult>` that supports
+`.Callback(...)` chained **before** `.Returns()` / `.ReturnsAsync()` / `.Throws()`:
+
+### Parameterless
+
+```csharp
+var called = false;
+builder.Setup(x => x.GetUser("123"))
+    .Callback(() => called = true)
+    .Returns(new User { Id = "123" });
+```
+
+### Raw argument array
+
+```csharp
+var captured = new List<object?[]>();
+builder.Setup(x => x.GetUser(It.IsAny<string>()))
+    .Callback((object?[] args) => captured.Add(args))
+    .Returns(new User { Id = "default" });
+```
+
+### Strongly-typed (1 parameter)
+
+```csharp
+var ids = new List<string>();
+builder.Setup(x => x.GetUser(It.IsAny<string>()))
+    .Callback<string>(id => ids.Add(id))
+    .Returns(new User { Id = "default" });
+```
+
+### Strongly-typed (2 parameters)
+
+```csharp
+builder.Setup(x => x.Update(It.IsAny<string>(), It.IsAny<int>()))
+    .Callback<string, int>((name, count) =>
+        Console.WriteLine($"{name}: {count}"))
+    .Returns(true);
+```
+
+### Strongly-typed (3 parameters)
+
+```csharp
+builder.Setup(x => x.Query(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+    .Callback<string, int, int>((proc, id, count) =>
+        Console.WriteLine($"{proc}: id={id}, count={count}"))
+    .Returns("ok");
+```
+
+### Chaining with ReturnsAsync
+
+```csharp
+builder.Setup(x => x.GetUserAsync("123"))
+    .Callback(() => log.Add("async call"))
+    .ReturnsAsync(new User { Id = "123" });
+```
+
+### Chaining with Throws
+
+```csharp
+builder.Setup(x => x.GetUser("bad"))
+    .Callback(() => log.Add("error path"))
+    .Throws(new KeyNotFoundException("not found"));
+```
+
+> **Note**: `Callback` methods return `SetupPhrase` (allowing further chaining), while
+> `Returns`, `ReturnsAsync`, and `Throws` return `Mock<T>` (ending the phrase and
+> allowing further builder configuration).
+
+---
+
 ## Fluent Chaining
 
 All callback methods return `Mock<T>` and can be chained:
@@ -150,6 +222,8 @@ var builder = Mock.Create<IOrderService>()
 
 ## Summary of Callback Signatures
 
+### OnCall (on Mock&lt;T&gt;)
+
 | Method | Expression type | Handler signature |
 |---|---|---|
 | `OnCall` | `Func` or `Action` | `Action` (parameterless) |
@@ -162,3 +236,13 @@ var builder = Mock.Create<IOrderService>()
 | `OnGetCallback<T>` | property | `Action` |
 | `OnSetCallback<T>` | property | `Action<T>` |
 | `OnSetCallback<T>` (matcher) | property | `Func<T,bool>` + `Action<T>` |
+
+### Callback (on SetupPhrase&lt;TResult&gt;)
+
+| Method | Handler signature | Returns |
+|---|---|---|
+| `.Callback(Action)` | `Action` (parameterless) | `SetupPhrase<TResult>` |
+| `.Callback(Action<object?[]>)` | `Action<object?[]>` (raw args) | `SetupPhrase<TResult>` |
+| `.Callback<T1>(Action<T1>)` | `Action<T1>` | `SetupPhrase<TResult>` |
+| `.Callback<T1,T2>(Action<T1,T2>)` | `Action<T1,T2>` | `SetupPhrase<TResult>` |
+| `.Callback<T1,T2,T3>(Action<T1,T2,T3>)` | `Action<T1,T2,T3>` | `SetupPhrase<TResult>` |

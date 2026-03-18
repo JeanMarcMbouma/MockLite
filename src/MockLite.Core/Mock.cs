@@ -59,16 +59,19 @@ public sealed class Mock<T> where T : class
 
     /// <summary>
     /// Begins a fluent setup for a method, returning a <see cref="SetupPhrase{TResult}"/>
-    /// that allows chaining <c>.Returns(value)</c>, <c>.ReturnsAsync(value)</c>, or <c>.Throws(ex)</c>.
+    /// that allows chaining <c>.Callback(...)</c>, <c>.Returns(value)</c>, <c>.ReturnsAsync(value)</c>, or <c>.Throws(ex)</c>.
     /// This is the Moq-compatible overload that solves covariant return type inference.
     /// </summary>
     /// <typeparam name="TResult">The return type of the method.</typeparam>
     /// <param name="expression">A lambda expression identifying the method to set up.</param>
-    /// <returns>A setup phrase for chaining <c>Returns</c>/<c>ReturnsAsync</c>/<c>Throws</c>.</returns>
+    /// <returns>A setup phrase for chaining <c>Callback</c>/<c>Returns</c>/<c>ReturnsAsync</c>/<c>Throws</c>.</returns>
     /// <example>
     /// <code>
     /// mock.Setup(x => x.GetUser("123")).Returns(new User { Id = "123" });
     /// mock.Setup(x => x.GetUsersAsync()).ReturnsAsync(new[] { user1, user2 });
+    /// mock.Setup(x => x.GetUser(It.IsAny&lt;string&gt;()))
+    ///     .Callback&lt;string&gt;(id => log.Add(id))
+    ///     .Returns(new User { Id = "default" });
     /// </code>
     /// </example>
     public SetupPhrase<TResult> Setup<TResult>(Expression<Func<T, TResult>> expression)
@@ -78,10 +81,12 @@ public sealed class Mock<T> where T : class
     }
 
     /// <summary>
-    /// Provides fluent continuation methods (<c>Returns</c>, <c>ReturnsAsync</c>, <c>Throws</c>)
-    /// after a <c>Setup</c> call. Solves the covariant return type inference problem: when
-    /// a method returns <c>Task&lt;IEnumerable&lt;T&gt;&gt;</c>, you can pass a <c>T[]</c>
-    /// or <c>List&lt;T&gt;</c> to <c>ReturnsAsync</c> without explicit casting.
+    /// Provides fluent continuation methods (<c>Callback</c>, <c>Returns</c>, <c>ReturnsAsync</c>, <c>Throws</c>)
+    /// after a <c>Setup</c> call. <c>Callback</c> methods return the phrase for further chaining,
+    /// while <c>Returns</c>/<c>ReturnsAsync</c>/<c>Throws</c> terminate the phrase and return <c>Mock&lt;T&gt;</c>.
+    /// Solves the covariant return type inference problem: when a method returns
+    /// <c>Task&lt;IEnumerable&lt;T&gt;&gt;</c>, you can pass a <c>T[]</c> or <c>List&lt;T&gt;</c>
+    /// to <c>ReturnsAsync</c> without explicit casting.
     /// </summary>
     public readonly struct SetupPhrase<TResult>
     {

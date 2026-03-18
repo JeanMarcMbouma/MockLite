@@ -18,6 +18,7 @@ High-level overview of all BbQ.MockLite features.
 | API | Description |
 |---|---|
 | `Setup(expr, Func<TResult>)` | Configure a constant or computed return value. |
+| `Setup(expr)` | Begin a fluent setup returning `SetupPhrase<TResult>` for `.Callback()`, `.Returns()`, `.ReturnsAsync()`, `.Throws()` chaining. |
 | `Setup<TResult,T1>(expr, Func<T1,TResult>)` | Return value computed from the first argument. |
 | `Setup<TResult,T1,T2>(expr, ...)` | Return value computed from the first two arguments. |
 | `Setup<TResult,T1,T2,T3>(expr, ...)` | Return value computed from the first three arguments. |
@@ -27,6 +28,24 @@ High-level overview of all BbQ.MockLite features.
 | `SetupSequence(expr, values)` | Return successive values on each call; last value repeats. |
 | `Throws(expr, exception)` | Throw an exception when a return-value method is called. |
 | `Throws(voidExpr, exception)` | Throw an exception when a void method is called. |
+
+---
+
+## SetupPhrase (Moq-Style Fluent Chaining)
+
+Returned by `Setup(expression)`, the `SetupPhrase<TResult>` struct supports:
+
+| API | Returns | Description |
+|---|---|---|
+| `.Returns(value)` | `Mock<T>` | Configure a constant return value. |
+| `.Returns(Func<TResult>)` | `Mock<T>` | Configure a factory-based return value. |
+| `.ReturnsAsync<TInner>(value)` | `Mock<T>` | Configure a `Task<T>` return with covariance support. |
+| `.Throws(exception)` | `Mock<T>` | Configure the method to throw. |
+| `.Callback(Action)` | `SetupPhrase` | Parameterless callback (chainable). |
+| `.Callback(Action<object?[]>)` | `SetupPhrase` | Raw argument array callback (chainable). |
+| `.Callback<T1>(Action<T1>)` | `SetupPhrase` | Strongly-typed callback for first parameter (chainable). |
+| `.Callback<T1,T2>(Action<T1,T2>)` | `SetupPhrase` | Strongly-typed callback for first two parameters (chainable). |
+| `.Callback<T1,T2,T3>(Action<T1,T2,T3>)` | `SetupPhrase` | Strongly-typed callback for first three parameters (chainable). |
 
 ---
 
