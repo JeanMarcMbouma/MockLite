@@ -168,6 +168,7 @@ public class InterfaceMockGenerator : ISourceGenerator
             var field = BehaviorFieldName(m);
             var delType = BehaviorDelegateType(m);
             sb.AppendLine($"    public {delType}? {field} {{ get; set; }}");
+            sb.AppendLine($"    public Action? {MethodCallbackFieldName(m)} {{ get; set; }}");
         }
 
         // Static cached MethodInfo fields for methods (avoids per-call GetMethod reflection).
@@ -209,6 +210,7 @@ public class InterfaceMockGenerator : ISourceGenerator
                 if (m.Parameters.Length > 0)
                     sb.Append(EmitMethodSetupWithMatcher(m, className));
                 sb.Append(EmitMethodReturns(m, className));
+                sb.Append(EmitMethodPhraseStruct(m, className));
             }
             sb.Append(EmitMethodVerify(m));
             if (m.Parameters.Length > 0 && !m.IsGenericMethod)
@@ -400,6 +402,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         else
         {
             var field = BehaviorFieldName(m);
+            var cbField = MethodCallbackFieldName(m);
+            sb.AppendLine($"        {cbField}?.Invoke();");
             if (ret == "void")
             {
                 sb.AppendLine($"        {field}?.Invoke({behaviorArgs});");
@@ -533,6 +537,70 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.AppendLine($"    public {className} {m.Name}Returns({ret} result) {{ {field} = ({args}) => result; return this; }}");
         }
+        return sb.ToString();
+    }
+
+    // --- Phrase-returning method setup (generated equivalents of SetupPhrase<TResult>) ---
+
+    private static string MethodCallbackFieldName(IMethodSymbol m) => $"{BehaviorFieldName(m).Replace("_Behavior", "")}_Callback";
+
+    private static string EmitMethodPhraseStruct(IMethodSymbol m, string className)
+    {
+        var field = BehaviorFieldName(m);
+        var cbField = MethodCallbackFieldName(m);
+        var ret = TypeDisplay(m.ReturnType);
+        var args = string.Join(", ", m.Parameters.Select(p => p.Name));
+        var behaviorType = BehaviorDelegateType(m);
+        var structName = $"SetupPhrase_{m.Name}";
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"    public readonly struct {structName}");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        private readonly {className} _mock;");
+        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
+
+        // Returns overloads (non-void only)
+        if (ret.StartsWith("Task<"))
+        {
+            var tArg = ret.Substring(5, ret.Length - 6);
+            sb.AppendLine($"        public {className} Returns({tArg} result) {{ _mock.{field} = ({args}) => Task.FromResult(result); return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+        }
+        else if (ret == "Task")
+        {
+            sb.AppendLine($"        public {className} Returns() {{ _mock.{field} = ({args}) => Task.CompletedTask; return _mock; }}");
+        }
+        else if (ret.StartsWith("ValueTask<"))
+        {
+            var tArg = ret.Substring(10, ret.Length - 11);
+            sb.AppendLine($"        public {className} Returns({tArg} result) {{ _mock.{field} = ({args}) => new ValueTask<{tArg}>(result); return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+        }
+        else if (ret == "ValueTask")
+        {
+            sb.AppendLine($"        public {className} Returns() {{ _mock.{field} = ({args}) => default; return _mock; }}");
+        }
+        else if (ret != "void")
+        {
+            sb.AppendLine($"        public {className} Returns({ret} result) {{ _mock.{field} = ({args}) => result; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+        }
+
+        // Throws (all methods)
+        if (ret == "void")
+        {
+            sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{field} = ({args}) => throw ex; return _mock; }}");
+        }
+        else
+        {
+            sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{field} = ({args}) => throw ex; return _mock; }}");
+        }
+
+        // Callback (chainable, returns phrase)
+        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField} = callback; return this; }}");
+
+        sb.AppendLine("    }");
+        sb.AppendLine($"    public {structName} Setup{m.Name}() => new {structName}(this);");
         return sb.ToString();
     }
 
