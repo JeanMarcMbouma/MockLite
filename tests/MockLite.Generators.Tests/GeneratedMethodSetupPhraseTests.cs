@@ -233,6 +233,104 @@ public class GeneratedMethodSetupPhraseTests
         Assert.Equal("val-hello", mock.Read("hello"));
     }
 
+    // --- Task (non-generic) phrase tests ---
+
+    [Fact]
+    public async Task SetupDoWorkAsync_Returns_Parameterless()
+    {
+        var mock = new MockTaskService();
+        mock.SetupDoWorkAsync().Returns();
+
+        await mock.DoWorkAsync(); // should complete without error
+    }
+
+    [Fact]
+    public async Task SetupDoWorkAsync_Returns_Factory()
+    {
+        var callCount = 0;
+        var mock = new MockTaskService();
+        mock.SetupDoWorkAsync().Returns(() => { callCount++; return Task.CompletedTask; });
+
+        await mock.DoWorkAsync();
+        await mock.DoWorkAsync();
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact]
+    public async Task SetupDoWorkWithArgAsync_Returns_Factory()
+    {
+        var captured = "";
+        var mock = new MockTaskService();
+        mock.SetupDoWorkWithArgAsync().Returns(input => { captured = input; return Task.CompletedTask; });
+
+        await mock.DoWorkWithArgAsync("hello");
+        Assert.Equal("hello", captured);
+    }
+
+    [Fact]
+    public async Task SetupDoWorkAsync_Callback_Then_Returns_Factory()
+    {
+        var called = false;
+        var callCount = 0;
+        var mock = new MockTaskService();
+        mock.SetupDoWorkAsync()
+            .Callback(() => called = true)
+            .Returns(() => { callCount++; return Task.CompletedTask; });
+
+        await mock.DoWorkAsync();
+        Assert.True(called);
+        Assert.Equal(1, callCount);
+    }
+
+    // --- ValueTask (non-generic) phrase tests ---
+
+    [Fact]
+    public async Task SetupProcessAsync_Returns_Parameterless()
+    {
+        var mock = new MockTaskService();
+        mock.SetupProcessAsync().Returns();
+
+        await mock.ProcessAsync(); // should complete without error
+    }
+
+    [Fact]
+    public async Task SetupProcessAsync_Returns_Factory()
+    {
+        var callCount = 0;
+        var mock = new MockTaskService();
+        mock.SetupProcessAsync().Returns(() => { callCount++; return default; });
+
+        await mock.ProcessAsync();
+        await mock.ProcessAsync();
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact]
+    public async Task SetupProcessWithArgAsync_Returns_Factory()
+    {
+        var captured = 0;
+        var mock = new MockTaskService();
+        mock.SetupProcessWithArgAsync().Returns(count => { captured = count; return default; });
+
+        await mock.ProcessWithArgAsync(42);
+        Assert.Equal(42, captured);
+    }
+
+    [Fact]
+    public async Task SetupProcessAsync_Callback_Then_Returns_Factory()
+    {
+        var called = false;
+        var callCount = 0;
+        var mock = new MockTaskService();
+        mock.SetupProcessAsync()
+            .Callback(() => called = true)
+            .Returns(() => { callCount++; return default; });
+
+        await mock.ProcessAsync();
+        Assert.True(called);
+        Assert.Equal(1, callCount);
+    }
+
     [Fact]
     public void Full_Fluent_Chain_SetupMethod_Returns_Then_SetupAnother()
     {
