@@ -44,6 +44,7 @@ var userRepo = Mock.Of<IUserRepository>();
 // 3. Setup behavior
 var testUser = new User { Id = "123", Name = "John Doe" };
 // For generated mocks: userRepo.SetupGetUser(userId => testUser);
+// Or use the convenience: userRepo.GetUserReturns(testUser);
 
 // 4. Use in tests
 var user = userRepo.GetUser("123");
@@ -503,6 +504,12 @@ public interface IPaymentGateway
 
 // The BbQ.MockLite generator creates: MockPaymentGateway class
 var mock = Mock.Of<IPaymentGateway>();
+
+// Generated convenience methods follow {MethodName}{Action} naming:
+mock.SetupProcessPayment(amount => amount > 0);       // Setup{Method}(behavior)
+mock.ProcessPaymentReturns(true);                      // {Method}Returns(value)
+mock.ProcessPaymentAsyncReturns(true);                 // async: wraps in Task.FromResult
+mock.VerifyProcessPayment(Times.Once);                 // Verify{Method}(times)
 ```
 
 **Benefits:**

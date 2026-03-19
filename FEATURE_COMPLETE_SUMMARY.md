@@ -157,6 +157,21 @@ Useful when testing multiple phases with the same mock instance.
 
 ---
 
+## Generated Mock Convenience Methods
+
+For each non-generic method and gettable property on a `[GenerateMock]` interface, the source generator emits convenience methods on the mock class using `{Name}Returns` naming:
+
+| Generated Method | Description |
+|---|---|
+| `{Method}Returns(value)` | Set a constant return value for a non-void method. Async methods are automatically wrapped (e.g. `Task.FromResult`). |
+| `Get{Property}Returns(value)` | Set a constant return value for a property getter. |
+| `Setup{Method}(behavior)` | Configure a method with a custom behavior delegate. |
+| `SetupGet{Property}(behavior)` | Configure a property getter with a custom factory. |
+| `Verify{Method}(times)` | Verify method call count. |
+| `VerifyGet{Property}(times)` | Verify property getter access count. |
+
+---
+
 ## See Also
 
 - [README](./README.md) — getting started and examples
