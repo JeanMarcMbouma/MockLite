@@ -825,12 +825,26 @@ public sealed class Mock<T> where T : class
         while (inner is UnaryExpression u && u.NodeType == ExpressionType.Convert)
             inner = u.Operand;
 
-        // Detect It.IsAny<T>() directly from the expression tree.
-        if (inner is MethodCallExpression mce &&
-            mce.Method.DeclaringType == typeof(It) &&
-            mce.Method.Name == nameof(It.IsAny) &&
-            mce.Arguments.Count == 0)
-            return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
+        if (inner is MethodCallExpression mce && mce.Method.DeclaringType == typeof(It))
+        {
+            // Detect It.IsAny<T>() directly from the expression tree.
+            if (mce.Method.Name == nameof(It.IsAny) && mce.Arguments.Count == 0)
+                return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
+
+            // Detect It.Matches<T>(predicate) and capture the predicate.
+            if (mce.Method.Name == nameof(It.Matches) && mce.Arguments.Count == 1)
+            {
+                var predicateObj = Expression.Lambda(mce.Arguments[0]).Compile().DynamicInvoke()!;
+                var typeArg = mce.Method.GetGenericArguments()[0];
+
+                // Build a compiled wrapper: (object? val) => ((Predicate<T>)predicate)((T)val)
+                var valParam = Expression.Parameter(typeof(object), "val");
+                var castVal = Expression.Convert(valParam, typeArg);
+                var invokeExpr = Expression.Invoke(Expression.Constant(predicateObj), castVal);
+                var wrapper = Expression.Lambda<Func<object?, bool>>(invokeExpr, valParam).Compile();
+                return new It.PredicateMatcher(wrapper);
+            }
+        }
 
         return Expression.Lambda(arg).Compile().DynamicInvoke();
     }
@@ -892,6 +906,11 @@ public sealed class Mock<T> where T : class
             for (int i = 0; i < matchArgs.Length; i++)
             {
                 if (matchIsAny[i]) continue;
+                if (matchArgs[i] is It.PredicateMatcher pm)
+                {
+                    if (!pm.Matches(invocationArgs[i])) return false;
+                    continue;
+                }
                 if (!Equals(matchArgs[i], invocationArgs[i])) return false;
             }
             return true;
