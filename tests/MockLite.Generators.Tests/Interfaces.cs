@@ -6,6 +6,7 @@ namespace BbQ.MockLite.Generators.Tests;
 [GenerateMock<ICompositeService>]
 [GenerateMock<ICollectionReturningService>]
 [GenerateMock<IGenericMethodService>]
+[GenerateMock<ITaskService>]
 public partial class Mocks { }
 
 public record User(string Username);
@@ -48,4 +49,13 @@ public interface IGenericMethodService
     void Execute<TItem>(TItem item);
     T Get<T>(string key) where T : class;
     int NonGenericMethod(string input);
+}
+
+// --- Task/ValueTask (non-generic) interface for testing ---
+public interface ITaskService
+{
+    Task DoWorkAsync();
+    Task DoWorkWithArgAsync(string input);
+    ValueTask ProcessAsync();
+    ValueTask ProcessWithArgAsync(int count);
 }

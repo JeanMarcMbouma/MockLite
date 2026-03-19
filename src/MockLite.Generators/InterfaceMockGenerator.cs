@@ -569,6 +569,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         else if (ret == "Task")
         {
             sb.AppendLine($"        public {className} Returns() {{ _mock.{field} = ({args}) => Task.CompletedTask; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
         }
         else if (ret.StartsWith("ValueTask<"))
         {
@@ -579,6 +580,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         else if (ret == "ValueTask")
         {
             sb.AppendLine($"        public {className} Returns() {{ _mock.{field} = ({args}) => default; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
         }
         else if (ret != "void")
         {
