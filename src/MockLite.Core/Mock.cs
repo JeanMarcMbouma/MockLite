@@ -844,7 +844,8 @@ public sealed class Mock<T> where T : class
                        (ue.NodeType == ExpressionType.Quote || ue.NodeType == ExpressionType.Convert))
                     predicateArg = ue.Operand;
 
-                // Build (object? value) => predicate((T)value) in a single compile step.
+                // Build wrapper: (object? value) => predicate((T)value)
+                // around the extracted lambda expression in a single compile step.
                 var valueParam = Expression.Parameter(typeof(object), "value");
                 var castVal = Expression.Convert(valueParam, typeArg);
                 var invokeExpr = Expression.Invoke(predicateArg, castVal);
