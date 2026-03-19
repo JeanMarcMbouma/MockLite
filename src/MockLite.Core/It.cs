@@ -26,7 +26,7 @@ public static class It
 
     /// <summary>
     /// Internal marker type used to carry a predicate matcher through the argument pipeline.
-    /// Created by <see cref="ExtractArgument"/> when it detects an <c>It.Matches&lt;T&gt;</c> call
+    /// Created internally when the framework detects an <c>It.Matches&lt;T&gt;</c> call
     /// in the expression tree.
     /// </summary>
     internal sealed class PredicateMatcher
