@@ -436,7 +436,7 @@ public class ItTests
     }
 
     [Fact]
-    public void Test_ItMatches_WithVerify_CountsMatchingCalls()
+    public void Test_ItMatches_WithVerify_ExplicitMatcherFiltersInvocations()
     {
         // Arrange
         var builder = Mock.Create<ITestService>();
@@ -447,7 +447,8 @@ public class ItTests
         mock.GetValue("beta");
         mock.GetValue("alpha-2");
 
-        // Assert - verify calls matching the predicate
+        // Assert - the explicit matcher lambda (not It.Matches) performs the filtering here;
+        // It.Matches in the expression is cosmetic since Verify discards extracted args.
         builder.Verify(
             x => x.GetValue(It.Matches<string>(s => s.StartsWith("alpha"))),
             args => args[0] is string s && s.StartsWith("alpha"),

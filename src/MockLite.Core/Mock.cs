@@ -832,16 +832,22 @@ public sealed class Mock<T> where T : class
                 return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
 
             // Detect It.Matches<T>(predicate) and capture the predicate.
+            // Extract the predicate directly from the expression tree, handling
+            // Quote (inline lambdas) and Convert wrappers to avoid DynamicInvoke.
             if (mce.Method.Name == nameof(It.Matches) && mce.Arguments.Count == 1)
             {
-                var predicateObj = Expression.Lambda(mce.Arguments[0]).Compile().DynamicInvoke()
-                    ?? throw new ArgumentException("It.Matches<T> predicate must not be null.");
                 var typeArg = mce.Method.GetGenericArguments()[0];
+                var predicateArg = mce.Arguments[0];
 
-                // Build a compiled wrapper: (object? value) => ((Predicate<T>)predicate)((T)value)
+                // Unwrap Quote (inline lambda) or Convert nodes.
+                while (predicateArg is UnaryExpression ue &&
+                       (ue.NodeType == ExpressionType.Quote || ue.NodeType == ExpressionType.Convert))
+                    predicateArg = ue.Operand;
+
+                // Build (object? value) => predicate((T)value) in a single compile step.
                 var valueParam = Expression.Parameter(typeof(object), "value");
                 var castVal = Expression.Convert(valueParam, typeArg);
-                var invokeExpr = Expression.Invoke(Expression.Constant(predicateObj), castVal);
+                var invokeExpr = Expression.Invoke(predicateArg, castVal);
                 var wrapper = Expression.Lambda<Func<object?, bool>>(invokeExpr, valueParam).Compile();
                 return new It.PredicateMatcher(wrapper);
             }
