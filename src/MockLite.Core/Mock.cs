@@ -834,14 +834,15 @@ public sealed class Mock<T> where T : class
             // Detect It.Matches<T>(predicate) and capture the predicate.
             if (mce.Method.Name == nameof(It.Matches) && mce.Arguments.Count == 1)
             {
-                var predicateObj = Expression.Lambda(mce.Arguments[0]).Compile().DynamicInvoke()!;
+                var predicateObj = Expression.Lambda(mce.Arguments[0]).Compile().DynamicInvoke()
+                    ?? throw new ArgumentException("It.Matches<T> predicate must not be null.");
                 var typeArg = mce.Method.GetGenericArguments()[0];
 
-                // Build a compiled wrapper: (object? val) => ((Predicate<T>)predicate)((T)val)
-                var valParam = Expression.Parameter(typeof(object), "val");
-                var castVal = Expression.Convert(valParam, typeArg);
+                // Build a compiled wrapper: (object? value) => ((Predicate<T>)predicate)((T)value)
+                var valueParam = Expression.Parameter(typeof(object), "value");
+                var castVal = Expression.Convert(valueParam, typeArg);
                 var invokeExpr = Expression.Invoke(Expression.Constant(predicateObj), castVal);
-                var wrapper = Expression.Lambda<Func<object?, bool>>(invokeExpr, valParam).Compile();
+                var wrapper = Expression.Lambda<Func<object?, bool>>(invokeExpr, valueParam).Compile();
                 return new It.PredicateMatcher(wrapper);
             }
         }
