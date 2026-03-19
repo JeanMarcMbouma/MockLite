@@ -263,4 +263,249 @@ public class ItTests
         Assert.Equal("generic-result", result2);
         Assert.Equal("generic-result", result3);
     }
+
+    // ==================== It.Matches<T> Tests ====================
+
+    [Fact]
+    public void Test_ItMatches_WithSetup_MatchesStringPredicate()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s.StartsWith("test"))), () => "matched");
+        var mock = builder.Object;
+
+        // Act
+        var result1 = mock.GetValue("test-one");
+        var result2 = mock.GetValue("test-two");
+        var resultDefault = mock.GetValue("other");
+
+        // Assert
+        Assert.Equal("matched", result1);
+        Assert.Equal("matched", result2);
+        Assert.Null(resultDefault); // does not match predicate, returns default
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithSetup_MatchesIntPredicate()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetNumber(It.Matches<int>(n => n > 10)), () => 99);
+        var mock = builder.Object;
+
+        // Act
+        var result1 = mock.GetNumber(11);
+        var result2 = mock.GetNumber(100);
+        var resultDefault = mock.GetNumber(5);
+
+        // Assert
+        Assert.Equal(99, result1);
+        Assert.Equal(99, result2);
+        Assert.Equal(0, resultDefault); // does not match predicate, returns default int
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithSetup_MultiplePredicateSetups()
+    {
+        // Arrange - two setups with different predicates
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s.StartsWith("admin"))), () => "admin-result");
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s.StartsWith("user"))), () => "user-result");
+        var mock = builder.Object;
+
+        // Act
+        var adminResult = mock.GetValue("admin-123");
+        var userResult = mock.GetValue("user-456");
+        var noMatch = mock.GetValue("guest-789");
+
+        // Assert
+        Assert.Equal("admin-result", adminResult);
+        Assert.Equal("user-result", userResult);
+        Assert.Null(noMatch);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithFluentSetup_Returns()
+    {
+        // Arrange - use the fluent Setup().Returns() API
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s.Length > 3)))
+               .Returns("long-key");
+        var mock = builder.Object;
+
+        // Act
+        var result1 = mock.GetValue("abcd");   // length 4 > 3
+        var result2 = mock.GetValue("ab");     // length 2, no match
+
+        // Assert
+        Assert.Equal("long-key", result1);
+        Assert.Null(result2);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithFluentSetup_ReturnsFactory()
+    {
+        // Arrange - use Returns with a factory
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetNumber(It.Matches<int>(n => n % 2 == 0)))
+               .Returns(() => 42);
+        var mock = builder.Object;
+
+        // Act
+        var even = mock.GetNumber(4);
+        var odd = mock.GetNumber(3);
+
+        // Assert
+        Assert.Equal(42, even);
+        Assert.Equal(0, odd); // no match, default int
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithFluentSetup_Throws()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s == "bad")))
+               .Throws(new InvalidOperationException("bad key"));
+        var mock = builder.Object;
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => mock.GetValue("bad"));
+        Assert.Equal("bad key", ex.Message);
+        Assert.Null(mock.GetValue("good")); // no match, returns default
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithFluentSetup_Callback()
+    {
+        // Arrange
+        var captured = new List<string>();
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s.Contains("log"))))
+               .Callback<string>(s => captured.Add(s))
+               .Returns("logged");
+        var mock = builder.Object;
+
+        // Act
+        var r1 = mock.GetValue("log-one");
+        var r2 = mock.GetValue("no-match");
+        var r3 = mock.GetValue("log-two");
+
+        // Assert - Callback fires for all invocations of the method (not scoped to matcher);
+        // Returns is scoped to the predicate match.
+        Assert.Equal(["log-one", "no-match", "log-two"], captured);
+        Assert.Equal("logged", r1);
+        Assert.Null(r2); // predicate doesn't match, returns default
+        Assert.Equal("logged", r3);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithSetup_RecordsInvocationsCorrectly()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s.StartsWith("a"))), () => "matched");
+        var mock = builder.Object;
+
+        // Act
+        mock.GetValue("abc");
+        mock.GetValue("xyz");
+
+        // Assert - all invocations are recorded regardless of match
+        Assert.Equal(2, builder.Invocations.Count);
+        Assert.Equal("abc", builder.Invocations[0].Arguments[0]);
+        Assert.Equal("xyz", builder.Invocations[1].Arguments[0]);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithOnCall_FiltersCallbacks()
+    {
+        // Arrange
+        var matchedCount = 0;
+        var builder = Mock.Create<ITestService>();
+        builder.OnCall(x => x.GetValue(It.Matches<string>(s => s.StartsWith("match"))), _ => matchedCount++);
+        var mock = builder.Object;
+
+        // Act
+        mock.GetValue("match-1");
+        mock.GetValue("other");
+        mock.GetValue("match-2");
+
+        // Assert
+        Assert.Equal(2, matchedCount);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithVerify_ExplicitMatcherFiltersInvocations()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        var mock = builder.Object;
+
+        // Act
+        mock.GetValue("alpha");
+        mock.GetValue("beta");
+        mock.GetValue("alpha-2");
+
+        // Assert - the explicit matcher lambda (not It.Matches) performs the filtering here;
+        // It.Matches in the expression is cosmetic since Verify discards extracted args.
+        builder.Verify(
+            x => x.GetValue(It.Matches<string>(s => s.StartsWith("alpha"))),
+            args => args[0] is string s && s.StartsWith("alpha"),
+            times => times == 2);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithSetup_CombinedWithExactValue()
+    {
+        // Arrange - exact match takes priority (added last)
+        var builder = Mock.Create<ITestService>();
+        builder.Setup(x => x.GetValue(It.Matches<string>(s => s.Length > 0)), () => "predicate-match");
+        builder.Setup(x => x.GetValue("special"), () => "exact-match");
+        var mock = builder.Object;
+
+        // Act
+        var exactResult = mock.GetValue("special");
+        var predicateResult = mock.GetValue("anything");
+
+        // Assert - most recent setup wins when both could match
+        Assert.Equal("exact-match", exactResult);
+        Assert.Equal("predicate-match", predicateResult);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithSetupSequence()
+    {
+        // Arrange
+        var builder = Mock.Create<ITestService>();
+        builder.SetupSequence(x => x.GetValue(It.Matches<string>(s => s.StartsWith("q"))), "first", "second", "third");
+        var mock = builder.Object;
+
+        // Act
+        var r1 = mock.GetValue("q1");
+        var r2 = mock.GetValue("q2");
+        var r3 = mock.GetValue("q3");
+
+        // Assert
+        Assert.Equal("first", r1);
+        Assert.Equal("second", r2);
+        Assert.Equal("third", r3);
+    }
+
+    [Fact]
+    public void Test_ItMatches_WithGenericInterface()
+    {
+        // Arrange
+        var builder = Mock.Create<IGenericService<string>>();
+        builder.Setup(x => x.GetItem(It.Matches<string>(id => id.Length == 3)), () => "three-char-id");
+        var mock = builder.Object;
+
+        // Act
+        var matched = mock.GetItem("abc");
+        var notMatched = mock.GetItem("ab");
+
+        // Assert
+        Assert.Equal("three-char-id", matched);
+        Assert.Null(notMatched);
+    }
 }

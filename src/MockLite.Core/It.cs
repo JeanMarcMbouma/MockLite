@@ -25,6 +25,19 @@ public static class It
     }
 
     /// <summary>
+    /// Internal marker type used to carry a predicate matcher through the argument pipeline.
+    /// Created internally when the framework detects an <c>It.Matches&lt;T&gt;</c> call
+    /// in the expression tree.
+    /// </summary>
+    internal sealed class PredicateMatcher
+    {
+        private readonly Func<object?, bool> _predicate;
+        internal PredicateMatcher(Func<object?, bool> predicate) => _predicate = predicate;
+        internal bool Matches(object? value) => _predicate(value);
+        public override string ToString() => "It.Matches";
+    }
+
+    /// <summary>
     /// Matches any value of the specified type.
     /// </summary>
     /// <typeparam name="T">The type of argument to match.</typeparam>

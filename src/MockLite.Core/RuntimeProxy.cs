@@ -159,6 +159,11 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
         for (int i = 0; i < isAny.Length; i++)
         {
             if (isAny[i]) continue;
+            if (matchArgs[i] is It.PredicateMatcher pm)
+            {
+                if (!pm.Matches(invArgs[i])) return false;
+                continue;
+            }
             if (!Equals(matchArgs[i], invArgs[i])) return false;
         }
         return true;

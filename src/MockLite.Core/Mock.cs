@@ -825,12 +825,34 @@ public sealed class Mock<T> where T : class
         while (inner is UnaryExpression u && u.NodeType == ExpressionType.Convert)
             inner = u.Operand;
 
-        // Detect It.IsAny<T>() directly from the expression tree.
-        if (inner is MethodCallExpression mce &&
-            mce.Method.DeclaringType == typeof(It) &&
-            mce.Method.Name == nameof(It.IsAny) &&
-            mce.Arguments.Count == 0)
-            return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
+        if (inner is MethodCallExpression mce && mce.Method.DeclaringType == typeof(It))
+        {
+            // Detect It.IsAny<T>() directly from the expression tree.
+            if (mce.Method.Name == nameof(It.IsAny) && mce.Arguments.Count == 0)
+                return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
+
+            // Detect It.Matches<T>(predicate) and capture the predicate.
+            // Extract the predicate directly from the expression tree, handling
+            // Quote (inline lambdas) and Convert wrappers to avoid DynamicInvoke.
+            if (mce.Method.Name == nameof(It.Matches) && mce.Arguments.Count == 1)
+            {
+                var typeArg = mce.Method.GetGenericArguments()[0];
+                var predicateArg = mce.Arguments[0];
+
+                // Unwrap Quote (inline lambda) or Convert nodes.
+                while (predicateArg is UnaryExpression ue &&
+                       (ue.NodeType == ExpressionType.Quote || ue.NodeType == ExpressionType.Convert))
+                    predicateArg = ue.Operand;
+
+                // Build wrapper: (object? value) => predicate((T)value)
+                // around the extracted lambda expression in a single compile step.
+                var valueParam = Expression.Parameter(typeof(object), "value");
+                var castVal = Expression.Convert(valueParam, typeArg);
+                var invokeExpr = Expression.Invoke(predicateArg, castVal);
+                var wrapper = Expression.Lambda<Func<object?, bool>>(invokeExpr, valueParam).Compile();
+                return new It.PredicateMatcher(wrapper);
+            }
+        }
 
         return Expression.Lambda(arg).Compile().DynamicInvoke();
     }
@@ -892,6 +914,11 @@ public sealed class Mock<T> where T : class
             for (int i = 0; i < matchArgs.Length; i++)
             {
                 if (matchIsAny[i]) continue;
+                if (matchArgs[i] is It.PredicateMatcher pm)
+                {
+                    if (!pm.Matches(invocationArgs[i])) return false;
+                    continue;
+                }
                 if (!Equals(matchArgs[i], invocationArgs[i])) return false;
             }
             return true;
