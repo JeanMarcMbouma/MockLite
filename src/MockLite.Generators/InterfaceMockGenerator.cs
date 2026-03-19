@@ -514,24 +514,24 @@ public class InterfaceMockGenerator : ISourceGenerator
         if (ret.StartsWith("Task<"))
         {
             var tArg = ret.Substring(5, ret.Length - 6);
-            sb.AppendLine($"    public {className} Returns{m.Name}({tArg} result) {{ {field} = ({args}) => Task.FromResult(result); return this; }}");
+            sb.AppendLine($"    public {className} {m.Name}Returns({tArg} result) {{ {field} = ({args}) => Task.FromResult(result); return this; }}");
         }
         else if (ret == "Task")
         {
-            sb.AppendLine($"    public {className} Returns{m.Name}() {{ {field} = ({args}) => Task.CompletedTask; return this; }}");
+            sb.AppendLine($"    public {className} {m.Name}Returns() {{ {field} = ({args}) => Task.CompletedTask; return this; }}");
         }
         else if (ret.StartsWith("ValueTask<"))
         {
             var tArg = ret.Substring(10, ret.Length - 11);
-            sb.AppendLine($"    public {className} Returns{m.Name}({tArg} result) {{ {field} = ({args}) => new ValueTask<{tArg}>(result); return this; }}");
+            sb.AppendLine($"    public {className} {m.Name}Returns({tArg} result) {{ {field} = ({args}) => new ValueTask<{tArg}>(result); return this; }}");
         }
         else if (ret == "ValueTask")
         {
-            sb.AppendLine($"    public {className} Returns{m.Name}() {{ {field} = ({args}) => default; return this; }}");
+            sb.AppendLine($"    public {className} {m.Name}Returns() {{ {field} = ({args}) => default; return this; }}");
         }
         else if (ret != "void")
         {
-            sb.AppendLine($"    public {className} Returns{m.Name}({ret} result) {{ {field} = ({args}) => result; return this; }}");
+            sb.AppendLine($"    public {className} {m.Name}Returns({ret} result) {{ {field} = ({args}) => result; return this; }}");
         }
         return sb.ToString();
     }
@@ -599,7 +599,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         var type = TypeDisplay(p.Type);
         var sb = new StringBuilder();
         sb.AppendLine($"    public {className} SetupGet{p.Name}(Func<{type}> behavior) {{ {GetBehaviorFieldName(p)} = behavior; return this; }}");
-        sb.AppendLine($"    public {className} ReturnsGet{p.Name}({type} value) {{ {GetBehaviorFieldName(p)} = () => value; return this; }}");
+        sb.AppendLine($"    public {className} Get{p.Name}Returns({type} value) {{ {GetBehaviorFieldName(p)} = () => value; return this; }}");
         return sb.ToString();
     }
 

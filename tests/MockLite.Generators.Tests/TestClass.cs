@@ -58,7 +58,7 @@ public class TestClass
 
         var svc = new MockUserService()
             .SetupGetCount(category => category.Length)            // behavior directly
-            .ReturnsGetUserAsync(new User("Jean"));                         // async returns
+            .GetUserAsyncReturns(new User("Jean"));                         // async returns
 
         svc.GetCount("alpha");               // 5
         var user = await svc.GetUserAsync(42);
@@ -88,7 +88,7 @@ public class CompositeInterfaceTests
     {
         var mock = new MockCompositeService()
             .SetupRead(key => $"value-{key}")
-            .ReturnsGetVersion(42);
+            .GetVersionReturns(42);
 
         Assert.Equal("value-hello", mock.Read("hello"));
         Assert.Equal(42, mock.GetVersion());
@@ -119,7 +119,7 @@ public class CompositeInterfaceTests
         // Setup methods from different base interfaces should all return MockCompositeService
         var mock = new MockCompositeService()
             .SetupRead(key => "read-value")
-            .ReturnsGetVersion(1);
+            .GetVersionReturns(1);
 
         Assert.Equal("read-value", mock.Read("anything"));
         Assert.Equal(1, mock.GetVersion());
@@ -216,7 +216,7 @@ public class GenericMethodGeneratorTests
     {
         // Ensure non-generic methods on the same interface still have setup/returns
         var mock = new MockGenericMethodService()
-            .ReturnsNonGenericMethod(42);
+            .NonGenericMethodReturns(42);
 
         Assert.Equal(42, mock.NonGenericMethod("test"));
     }
@@ -237,6 +237,79 @@ public class GenericMethodGeneratorTests
         Assert.True(mock.Invocations[1].Method.IsGenericMethod);
         Assert.Equal("cmd1", mock.Invocations[0].Arguments[0]);
         Assert.Equal("cmd2", mock.Invocations[1].Arguments[0]);
+    }
+}
+
+// ==================== GENERATED METHOD SETUP PHRASE TESTS ====================
+public class GeneratedMethodSetupPhraseTests
+{
+    [Fact]
+    public void GetCountReturns_SetsConstantReturnValue()
+    {
+        var mock = new MockUserService()
+            .GetCountReturns(42);
+
+        Assert.Equal(42, mock.GetCount("anything"));
+    }
+
+    [Fact]
+    public void GetCountReturns_FluentChaining_ReturnsMock()
+    {
+        var mock = new MockUserService()
+            .GetCountReturns(10)
+            .SetupGetCount(c => c.Length);
+
+        // Last setup wins
+        Assert.Equal(5, mock.GetCount("hello"));
+    }
+
+    [Fact]
+    public async Task GetUserAsyncReturns_SetsAsyncReturnValue()
+    {
+        var mock = new MockUserService()
+            .GetUserAsyncReturns(new User("Alice"));
+
+        var user = await mock.GetUserAsync(1);
+        Assert.Equal("Alice", user.Username);
+    }
+
+    [Fact]
+    public void GetVersionReturns_WorksOnCompositeInterface()
+    {
+        var mock = new MockCompositeService()
+            .GetVersionReturns(99);
+
+        Assert.Equal(99, mock.GetVersion());
+    }
+
+    [Fact]
+    public void NonGenericMethodReturns_WorksOnGenericMethodInterface()
+    {
+        var mock = new MockGenericMethodService()
+            .NonGenericMethodReturns(7);
+
+        Assert.Equal(7, mock.NonGenericMethod("input"));
+    }
+
+    [Fact]
+    public void GetNameReturns_SetsPropertyGetterValue()
+    {
+        var mock = new MockUserService();
+        mock.GetNameReturns("Bob");
+
+        Assert.Equal("Bob", mock.Name);
+    }
+
+    [Fact]
+    public void GetNameReturns_FluentChaining_ReturnsMock()
+    {
+        // GetNameReturns returns MockUserService for further chaining
+        var mock = new MockUserService()
+            .GetNameReturns("Carol")
+            .GetCountReturns(5);
+
+        Assert.Equal("Carol", mock.Name);
+        Assert.Equal(5, mock.GetCount("x"));
     }
 }
 
