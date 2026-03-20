@@ -84,6 +84,3 @@ public static class It
     /// </example>
     public static T Matches<T>(Predicate<T> predicate) => default!;
 }
-
-
-public readonly record struct IsAny<T>;
