@@ -16,7 +16,7 @@ namespace BbQ.MockLite;
 ///   <term><see cref="GenerateMockAttribute"/></term>
 ///   <description>
 ///   Applied directly to interfaces:
-///   <c>[GenerateMock(typeof(IMyInterface))] public interface IMyInterface { }</c>
+///   <c>[GenerateMock] public interface IMyInterface { }</c>
 ///   </description>
 /// </item>
 /// <item>
@@ -30,7 +30,7 @@ namespace BbQ.MockLite;
 /// </remarks>
 /// <example>
 /// <code>
-/// [GenerateMock(typeof(IUserRepository))]
+/// [GenerateMock]
 /// public interface IUserRepository
 /// {
 ///     User GetUser(string id);
@@ -45,12 +45,26 @@ namespace BbQ.MockLite;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Interface)]
-public sealed class GenerateMockAttribute(Type interfaceType) : Attribute
+public sealed class GenerateMockAttribute : Attribute
 {
     /// <summary>
-    /// Gets the interface type for which to generate a mock.
+    /// Initializes the attribute for the interface on which it is declared.
     /// </summary>
-    public Type Type { get; } = interfaceType;
+    public GenerateMockAttribute() { }
+
+    /// <summary>
+    /// Initializes the attribute with an explicit interface type.
+    /// </summary>
+    /// <remarks>
+    /// The type is inferred when the attribute is applied directly to an interface, so the
+    /// parameterless constructor is preferred. This overload is retained for compatibility.
+    /// </remarks>
+    public GenerateMockAttribute(Type interfaceType) => Type = interfaceType;
+
+    /// <summary>
+    /// Gets the explicitly supplied interface type, if any.
+    /// </summary>
+    public Type? Type { get; }
 }
 
 /// <summary>

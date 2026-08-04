@@ -9,6 +9,12 @@ namespace BbQ.MockLite.Generators.Tests;
 [GenerateMock<ITaskService>]
 public partial class Mocks { }
 
+[GenerateMock]
+public interface IDirectlyAnnotatedService
+{
+    int GetValue();
+}
+
 public record User(string Username);
 public interface IUserService
 {

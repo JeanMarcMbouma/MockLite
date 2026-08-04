@@ -10,7 +10,7 @@ namespace BbQ.MockLite.Samples;
 // ============================================================================
 
 // Define your interfaces with the GenerateMock attribute
-[GenerateMock(typeof(IUserRepository))]
+[GenerateMock]
 public interface IUserRepository
 {
     User? GetUser(string userId);
@@ -53,7 +53,7 @@ public class BasicMockExample
 // Sample 2: Argument Matchers
 // ============================================================================
 
-[GenerateMock(typeof(ILogger))]
+[GenerateMock]
 public interface ILogger
 {
     void Log(string level, string message);
@@ -88,7 +88,7 @@ public class ArgumentMatcherExample
 // Sample 3: Times Predicates
 // ============================================================================
 
-[GenerateMock(typeof(IEmailService))]
+[GenerateMock]
 public interface IEmailService
 {
     void SendEmail(string to, string subject, string body);
@@ -137,7 +137,7 @@ public class TimesPredicateExample
 // Sample 4: Verification and Exception Handling
 // ============================================================================
 
-[GenerateMock(typeof(IPaymentGateway))]
+[GenerateMock]
 public interface IPaymentGateway
 {
     bool ProcessPayment(string cardNumber, decimal amount);

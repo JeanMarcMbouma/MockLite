@@ -1876,7 +1876,7 @@ public static class Mock
     /// </remarks>
     /// <example>
     /// <code>
-    /// [GenerateMock(typeof(IUserRepository))]
+    /// [GenerateMock]
     /// public interface IUserRepository
     /// {
     ///     User GetUser(string id);

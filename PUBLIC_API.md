@@ -37,7 +37,7 @@ var resolvedClock = (MockClock)Mock.Of<IClock>();
 Annotate an interface you own with the non-generic attribute and its interface type:
 
 ```csharp
-[GenerateMock(typeof(IClock))]
+[GenerateMock]
 public interface IClock
 {
     DateTime UtcNow { get; }
@@ -232,7 +232,8 @@ Create an invocation record with `new Invocation(MethodInfo method, object[] arg
 ## Supporting types
 
 - `VerificationException(string message)` is the sealed exception thrown by failed runtime and generated verification.
-- `GenerateMockAttribute(Type interfaceType)` exposes the supplied type through its `Type` property and is valid on interfaces.
+- `GenerateMockAttribute()` is valid on interfaces; the generator infers the target from the annotated declaration.
+- `GenerateMockAttribute(Type interfaceType)` remains available for compatibility, but the explicit type is not required when annotating an interface. Its nullable `Type` property exposes the supplied type.
 - `GenerateMockAttribute<T>` is valid on classes and allows multiple instances.
 - `GeneratedMockAttribute` marks generated classes and is intended for generator and analyzer infrastructure.
 - `MockTypeRegistry.Register<TInterface, TMock>()` registers a generated factory. `TInterface` must be a reference type and `TMock` must implement it and have a public parameterless constructor. Generated module initializers call this automatically.

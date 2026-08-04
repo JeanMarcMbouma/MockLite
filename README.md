@@ -34,7 +34,7 @@ dotnet add package BbQ.MockLite.Generators
 using BbQ.MockLite;
 
 // 1. Define your interface
-[GenerateMock(typeof(IUserRepository))]
+[GenerateMock]
 public interface IUserRepository
 {
     User? GetUser(string userId);
@@ -540,7 +540,7 @@ BbQ.MockLite uses an intelligent two-tier approach:
 Mark interfaces with `[GenerateMock]` attribute to generate optimized mock implementations at compile time:
 
 ```csharp
-[GenerateMock(typeof(IPaymentGateway))]
+[GenerateMock]
 public interface IPaymentGateway
 {
     bool ProcessPayment(decimal amount);
@@ -657,7 +657,7 @@ Times.Between(2, 5)  // At least 2 and at most 5 calls (inclusive)
 BbQ.MockLite fully supports async methods:
 
 ```csharp
-[GenerateMock(typeof(IAsyncRepository))]
+[GenerateMock]
 public interface IAsyncRepository
 {
     Task<User?> GetUserAsync(string userId);
