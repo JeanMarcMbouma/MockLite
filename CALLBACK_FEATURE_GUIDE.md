@@ -2,6 +2,8 @@
 
 Complete API reference for BbQ.MockLite callback and event-hook features.
 
+See the [Public API Reference](./PUBLIC_API.md) for creation, setup, verification, generated members, matchers, defaults, and supporting types.
+
 ---
 
 ## Overview

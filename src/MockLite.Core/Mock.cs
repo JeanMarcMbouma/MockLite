@@ -1865,12 +1865,14 @@ public static class Mock
     /// </summary>
     /// <typeparam name="T">The interface type to mock. Must be a class or interface.</typeparam>
     /// <returns>
-    /// A mock instance that can be configured with <c>Setup</c>, <c>Returns</c>, and verified with <c>Verify</c>.
-    /// If a generated mock exists, returns an instance of the generated class; otherwise returns a runtime proxy.
+    /// A mock instance implementing <typeparamref name="T"/>. If a generated mock exists,
+    /// returns an instance of the generated class; otherwise returns a runtime proxy.
     /// </returns>
     /// <remarks>
     /// Generated mocks are preferred for better performance. Decorate your interfaces with
     /// <see cref="GenerateMockAttribute"/> to generate optimized mock implementations at compile time.
+    /// The return value is statically typed as <typeparamref name="T"/>; construct or cast to the
+    /// generated <c>MockXxx</c> type to access its generated setup and verification members.
     /// </remarks>
     /// <example>
     /// <code>
@@ -1880,7 +1882,7 @@ public static class Mock
     ///     User GetUser(string id);
     /// }
     /// 
-    /// var mock = Mock.Of&lt;IUserRepository&gt;();
+    /// var mock = new MockUserRepository();
     /// mock.SetupGetUser(id => new User { Id = id, Name = "Test" });
     /// var user = mock.GetUser("123");
     /// </code>

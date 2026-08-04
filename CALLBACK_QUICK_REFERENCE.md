@@ -108,5 +108,6 @@ builder.Setup(x => x.GetUserAsync("123"))
 ## See Also
 
 - [Callback Feature Guide](./CALLBACK_FEATURE_GUIDE.md) — complete API reference
+- [Public API Reference](./PUBLIC_API.md) — full runtime and generated API
 - [Feature Summary](./FEATURE_COMPLETE_SUMMARY.md) — full feature overview
 - [README](./README.md) — getting started guide

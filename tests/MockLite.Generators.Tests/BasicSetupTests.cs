@@ -3,6 +3,15 @@
 public class BasicSetupTests
 {
     [Fact]
+    public void ParameterlessAttribute_GeneratesMockForAnnotatedInterface()
+    {
+        var service = new MockDirectlyAnnotatedService()
+            .GetValueReturns(42);
+
+        Assert.Equal(42, service.GetValue());
+    }
+
+    [Fact]
     public async Task TestMethod()
     {
 

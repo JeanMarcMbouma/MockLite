@@ -41,7 +41,13 @@ Returned by `Setup(expression)`, the `SetupPhrase<TResult>` struct supports:
 |---|---|---|
 | `.Returns(value)` | `Mock<T>` | Configure a constant return value. |
 | `.Returns(Func<TResult>)` | `Mock<T>` | Configure a factory-based return value. |
+| `.Returns<T1>(Func<T1,TResult>)` | `Mock<T>` | Compute the result from the first argument. |
+| `.Returns<T1,T2>(Func<T1,T2,TResult>)` | `Mock<T>` | Compute the result from the first two arguments. |
+| `.Returns<T1,T2,T3>(Func<T1,T2,T3,TResult>)` | `Mock<T>` | Compute the result from the first three arguments. |
 | `.ReturnsAsync<TInner>(value)` | `Mock<T>` | Configure a `Task<T>` return with covariance support. |
+| `.ReturnsAsync<T1,TInner>(factory)` | `Mock<T>` | Compute the inner task value from the first argument. |
+| `.ReturnsAsync<T1,T2,TInner>(factory)` | `Mock<T>` | Compute the inner task value from the first two arguments. |
+| `.ReturnsAsync<T1,T2,T3,TInner>(factory)` | `Mock<T>` | Compute the inner task value from the first three arguments. |
 | `.Throws(exception)` | `Mock<T>` | Configure the method to throw. |
 | `.Callback(Action)` | `SetupPhrase` | Parameterless callback (chainable). |
 | `.Callback(Action<object?[]>)` | `SetupPhrase` | Raw argument array callback (chainable). |
@@ -78,12 +84,12 @@ Returned by `SetupSet(property)`, the `SetSetupPhrase<TProp>` struct supports:
 
 | API | Description |
 |---|---|
-| `Verify(expr, Func<int,bool>)` | Verify a return-value method call count. |
-| `Verify(voidExpr, Func<int,bool>)` | Verify a void method call count. |
-| `Verify(expr, matcher, Func<int,bool>)` | Verify call count with argument matching. |
-| `VerifyGet(prop, Func<int,bool>)` | Verify property getter access count. |
-| `VerifySet(prop, Func<int,bool>)` | Verify property setter call count. |
-| `VerifySet(prop, matcher, Func<int,bool>)` | Verify property setter with value matching. |
+| `Verify(expr, times, message?)` | Verify a return-value method call count. The expression arguments do not filter calls. |
+| `Verify(voidExpr, times, message?)` | Verify a void method call count. The expression arguments do not filter calls. |
+| `Verify(expr, matcher, times, message?)` | Verify a return-value method with `object?[]` argument matching. |
+| `VerifyGet(prop, times, message?)` | Verify property getter access count. |
+| `VerifySet(prop, times, message?)` | Verify property setter call count. |
+| `VerifySet(prop, matcher, times, message?)` | Verify property setter with value matching. |
 
 ---
 
@@ -146,6 +152,8 @@ Every method call on a mock is automatically recorded in `Mock<T>.Invocations`
 `Mock<T>.Reset()` clears all recorded invocations while preserving setups and callbacks.
 Useful when testing multiple phases with the same mock instance.
 
+`Mock<T>.SetReturnsDefault<TDefault>(value)` overrides the fallback used by unconfigured methods returning exactly `TDefault`.
+
 ---
 
 ## Two-Tier Architecture
@@ -174,6 +182,7 @@ For each non-generic method and gettable property on a `[GenerateMock]` interfac
 
 ## See Also
 
+- [Public API Reference](./PUBLIC_API.md) — full runtime and generated API
 - [README](./README.md) — getting started and examples
 - [Callback Feature Guide](./CALLBACK_FEATURE_GUIDE.md) — detailed callback reference
 - [Callback Quick Reference](./CALLBACK_QUICK_REFERENCE.md) — quick-start patterns
