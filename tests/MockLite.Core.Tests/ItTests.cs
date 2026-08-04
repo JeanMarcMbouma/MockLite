@@ -1,4 +1,4 @@
-using System;
+using BbQ.MockLite.Tests.Stubs;
 
 namespace BbQ.MockLite.Tests;
 

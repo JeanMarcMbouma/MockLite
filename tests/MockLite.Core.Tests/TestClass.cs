@@ -1,27 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+﻿using BbQ.MockLite.Tests.Stubs;
 
 namespace BbQ.MockLite.Tests;
-
-public interface ITestService
-{
-    string GetValue(string key);
-    int GetNumber(int input);
-    void DoSomething();
-    Task<string> GetValueAsync(string key);
-    Task DoSomethingAsync();
-}
-
-public interface IPropertyService
-{
-    string Name { get; set; }
-    int Count { get; }
-}
-
-public interface IGenericService<T>
-{
-    T GetItem(string id);
-    void SetItem(T item);
-}
 
 public class TestClass
 {

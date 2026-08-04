@@ -103,6 +103,7 @@ public sealed class Mock<T> where T : class
 
         /// <summary>
         /// Configures the method to return the specified value.
+        /// <paramref name="value"/> is captured at setup time and returned on every invocation.
         /// </summary>
         public Mock<T> Returns(TResult value)
         {
@@ -112,10 +113,48 @@ public sealed class Mock<T> where T : class
 
         /// <summary>
         /// Configures the method with a value factory invoked on each call.
+        /// <paramref name="valueFactory"/> is invoked on every method call to produce the return value.
         /// </summary>
         public Mock<T> Returns(Func<TResult> valueFactory)
         {
             _mock._proxy.Setup(_method, _args, valueFactory);
+            return _mock;
+        }
+
+        /// <summary>
+        /// Configures the method with a value factory invoked on each call.
+        /// <paramref name="valueFactory"/> is invoked on every method call to produce the return value.
+        /// </summary>
+        public Mock<T> Returns<T1>(Func<T1, TResult> valueFactory)
+        {
+            ValidateAndSetupOnCall(_method, [typeof(T1)], nameof(valueFactory));
+            var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1)], typeof(TResult));
+            _mock._proxy.Setup(_method, _args, behavior);
+            return _mock;
+        }
+
+
+        /// <summary>
+        /// Configures the method with a value factory invoked on each call.
+        /// <paramref name="valueFactory"/> is invoked on every method call to produce the return value.
+        /// </summary>
+        public Mock<T> Returns<T1, T2>(Func<T1, T2, TResult> valueFactory)
+        {
+            ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2)], nameof(valueFactory));
+            var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2)], typeof(TResult));
+            _mock._proxy.Setup(_method, _args, behavior);
+            return _mock;
+        }
+
+        /// <summary>
+        /// Configures the method with a value factory invoked on each call.
+        /// <paramref name="valueFactory"/> is invoked on every method call to produce the return value.
+        /// </summary>
+        public Mock<T> Returns<T1, T2, T3>(Func<T1, T2, T3, TResult> valueFactory)
+        {
+            ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2), typeof(T3)], nameof(valueFactory));
+            var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2), typeof(T3)], typeof(TResult));
+            _mock._proxy.Setup(_method, _args, behavior);
             return _mock;
         }
 
@@ -137,9 +176,122 @@ public sealed class Mock<T> where T : class
                     // Create Task.FromResult<innerType>(value) to get the correct Task<TReturn> type.
                     var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
                         .MakeGenericMethod(innerType)
-                        .Invoke(null, new object?[] { value });
+                        .Invoke(null, [value]);
                     var castTask = (TResult)task!;
                     _mock._proxy.Setup(_method, _args, new Func<TResult>(() => castTask));
+                    return _mock;
+                }
+            }
+            throw new InvalidOperationException(
+                $"ReturnsAsync<{typeof(TInner).Name}> can only be used when the method returns Task<T> " +
+                $"and {typeof(TInner).Name} is assignable to T. Method returns {resultType.Name}.");
+        }
+
+        /// <summary>
+        /// For <c>Task&lt;TInner&gt;</c>-returning methods, configures the method to return
+        /// <c>Task.FromResult(value)</c>. Handles covariance: accepts <c>T[]</c> when the
+        /// method returns <c>Task&lt;IEnumerable&lt;T&gt;&gt;</c>.
+        /// </summary>
+        /// <typeparam name="TInner">The inner value type (unwrapped from Task).</typeparam>
+        /// <typeparam name="T1">The type of the first parameter.</typeparam>
+        /// <param name="valueFactory">A function that produces the inner value to wrap in a completed Task.</param>
+        public Mock<T> ReturnsAsync<T1, TInner>(Func<T1, TInner> valueFactory)
+        {
+            var resultType = typeof(TResult);
+            if (resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                var innerType = resultType.GenericTypeArguments[0];
+                if (innerType.IsAssignableFrom(typeof(TInner)))
+                {
+                    ValidateAndSetupOnCall(_method, [typeof(T1)], nameof(valueFactory));
+                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1)], typeof(TInner));
+
+                    // Wrap the result in Task.FromResult
+                    var wrappedBehavior = new Func<T1, TResult>(arg1 =>
+                    {
+                        var innerResult = behavior.DynamicInvoke(arg1);
+                        var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
+                            .MakeGenericMethod(innerType)
+                            .Invoke(null, [innerResult]);
+                        return (TResult)task!;
+                    });
+                    _mock._proxy.Setup(_method, _args, wrappedBehavior);
+                    return _mock;
+                }
+            }
+            throw new InvalidOperationException(
+                $"ReturnsAsync<{typeof(TInner).Name}> can only be used when the method returns Task<T> " +
+                $"and {typeof(TInner).Name} is assignable to T. Method returns {resultType.Name}.");
+        }
+
+        /// <summary>
+        /// For <c>Task&lt;TInner&gt;</c>-returning methods, configures the method to return
+        /// <c>Task.FromResult(value)</c>. Handles covariance: accepts <c>T[]</c> when the
+        /// method returns <c>Task&lt;IEnumerable&lt;T&gt;&gt;</c>.
+        /// </summary>
+        /// <typeparam name="TInner">The inner value type (unwrapped from Task).</typeparam>
+        /// <typeparam name="T1">The type of the first parameter.</typeparam>
+        /// <typeparam name="T2">The type of the second parameter.</typeparam>
+        /// <param name="valueFactory">A function that produces the inner value to wrap in a completed Task.</param>
+
+        public Mock<T> ReturnsAsync<T1, T2, TInner>(Func<T1, T2, TInner> valueFactory)
+        {
+            var resultType = typeof(TResult);
+            if (resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                var innerType = resultType.GenericTypeArguments[0];
+                if (innerType.IsAssignableFrom(typeof(TInner)))
+                {
+                    ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2)], nameof(valueFactory));
+                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2)], typeof(TInner));
+                    // Wrap the result in Task.FromResult
+                    var wrappedBehavior = new Func<T1, T2, TResult>((arg1, arg2) =>
+                    {
+                        var innerResult = behavior.DynamicInvoke(arg1, arg2);
+                        var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
+                            .MakeGenericMethod(innerType)
+                            .Invoke(null, [innerResult]);
+                        return (TResult)task!;
+                    });
+                    _mock._proxy.Setup(_method, _args, wrappedBehavior);
+                    return _mock;
+                }
+            }
+            throw new InvalidOperationException(
+                $"ReturnsAsync<{typeof(TInner).Name}> can only be used when the method returns Task<T> " +
+                $"and {typeof(TInner).Name} is assignable to T. Method returns {resultType.Name}.");
+        }
+
+        /// <summary>
+        /// For <c>Task&lt;TInner&gt;</c>-returning methods, configures the method to return
+        /// <c>Task.FromResult(value)</c>. Handles covariance: accepts <c>T[]</c> when the
+        /// method returns <c>Task&lt;IEnumerable&lt;T&gt;&gt;</c>.
+        /// </summary>
+        /// <typeparam name="TInner">The inner value type (unwrapped from Task).</typeparam>
+        /// <typeparam name="T1">The type of the first parameter.</typeparam>
+        /// <typeparam name="T2">The type of the second parameter.</typeparam>
+        /// <typeparam name="T3">The type of the third parameter.</typeparam>
+        /// <param name="valueFactory">A function that produces the inner value to wrap in a completed Task.</param>
+        public Mock<T> ReturnsAsync<T1, T2, T3, TInner>(Func<T1, T2, T3, TInner> valueFactory)
+        {
+            var resultType = typeof(TResult);
+            if (resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                var innerType = resultType.GenericTypeArguments[0];
+                if (innerType.IsAssignableFrom(typeof(TInner)))
+                {
+                    ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2), typeof(T3)], nameof(valueFactory));
+                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2), typeof(T3)], typeof(TInner));
+                    // Wrap the result in Task.FromResult
+                    var wrappedBehavior = new Func<T1, T2, T3, TResult>((arg1, arg2, arg3) =>
+                    {
+                        var innerResult = behavior.DynamicInvoke(arg1, arg2, arg3);
+                        var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
+                            .MakeGenericMethod(innerType)
+                            .Invoke(null, [innerResult]);
+                        return (TResult)task!;
+                    });
+                    _mock._proxy.Setup(_method, _args, wrappedBehavior);
                     return _mock;
                 }
             }
@@ -201,7 +353,7 @@ public sealed class Mock<T> where T : class
         /// </summary>
         public SetupPhrase<TResult> Callback<T1>(Action<T1> callback)
         {
-            ValidateAndSetupOnCall(_method, new[] { typeof(T1) }, nameof(callback));
+            ValidateAndSetupOnCall(_method, [typeof(T1)], nameof(callback));
             _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!));
             return this;
         }
@@ -212,7 +364,7 @@ public sealed class Mock<T> where T : class
         /// </summary>
         public SetupPhrase<TResult> Callback<T1, T2>(Action<T1, T2> callback)
         {
-            ValidateAndSetupOnCall(_method, new[] { typeof(T1), typeof(T2) }, nameof(callback));
+            ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2)], nameof(callback));
             _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!, (T2)args[1]!));
             return this;
         }
@@ -223,7 +375,7 @@ public sealed class Mock<T> where T : class
         /// </summary>
         public SetupPhrase<TResult> Callback<T1, T2, T3>(Action<T1, T2, T3> callback)
         {
-            ValidateAndSetupOnCall(_method, new[] { typeof(T1), typeof(T2), typeof(T3) }, nameof(callback));
+            ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2), typeof(T3)], nameof(callback));
             _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!, (T2)args[1]!, (T3)args[2]!));
             return this;
         }
@@ -446,7 +598,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> Setup<TResult, T1>(Expression<Func<T, TResult>> expression, Func<T1, TResult> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        var behavior = CreatePartialHandlerDelegate(method, handler, new[] { typeof(T1) }, typeof(TResult));
+        var behavior = CreatePartialHandlerDelegate(method, handler, [typeof(T1)], typeof(TResult));
         _proxy.Setup(method, args, behavior);
         return this;
     }
@@ -472,7 +624,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> Setup<TResult, T1, T2>(Expression<Func<T, TResult>> expression, Func<T1, T2, TResult> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        var behavior = CreatePartialHandlerDelegate(method, handler, new[] { typeof(T1), typeof(T2) }, typeof(TResult));
+        var behavior = CreatePartialHandlerDelegate(method, handler, [typeof(T1), typeof(T2)], typeof(TResult));
         _proxy.Setup(method, args, behavior);
         return this;
     }
@@ -499,7 +651,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> Setup<TResult, T1, T2, T3>(Expression<Func<T, TResult>> expression, Func<T1, T2, T3, TResult> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        var behavior = CreatePartialHandlerDelegate(method, handler, new[] { typeof(T1), typeof(T2), typeof(T3) }, typeof(TResult));
+        var behavior = CreatePartialHandlerDelegate(method, handler, [typeof(T1), typeof(T2), typeof(T3)], typeof(TResult));
         _proxy.Setup(method, args, behavior);
         return this;
     }
@@ -793,11 +945,11 @@ public sealed class Mock<T> where T : class
     private static (MethodInfo, object?[]) ExtractMethod(LambdaExpression expr)
     {
         var body = expr.Body;
-        
+
         // Handle Convert expressions (e.g., when return type is boxed to object)
         if (body is UnaryExpression unary && unary.NodeType == ExpressionType.Convert)
             body = unary.Operand;
-        
+
         if (body is MethodCallExpression call)
         {
             var callArgs = call.Arguments;
@@ -964,7 +1116,7 @@ public sealed class Mock<T> where T : class
     private static Delegate CreatePartialHandlerDelegate(MethodInfo method, Delegate handler, Type[] handlerParamTypes, Type returnType)
     {
         var methodParams = method.GetParameters();
-        
+
         // Validate that the method has at least as many parameters as the handler expects
         if (methodParams.Length < handlerParamTypes.Length)
         {
@@ -973,13 +1125,13 @@ public sealed class Mock<T> where T : class
                 $"The handler can only receive up to {methodParams.Length} parameter(s).",
                 nameof(handler));
         }
-        
+
         // Validate type compatibility for each handler parameter
         for (int i = 0; i < handlerParamTypes.Length; i++)
         {
             var methodParamType = methodParams[i].ParameterType;
             var handlerParamType = handlerParamTypes[i];
-            
+
             // The method parameter type must be assignable to the handler parameter type
             if (!handlerParamType.IsAssignableFrom(methodParamType))
             {
@@ -989,27 +1141,27 @@ public sealed class Mock<T> where T : class
                     nameof(handler));
             }
         }
-        
+
         // If the method has the exact same number of parameters as the handler, just return the handler
         if (methodParams.Length == handlerParamTypes.Length)
         {
             return handler;
         }
-        
+
         // Build parameter expressions for the full method signature
         var methodParamExpressions = methodParams
             .Select(p => Expression.Parameter(p.ParameterType, p.Name))
             .ToArray();
-        
+
         // Create expression to invoke the handler with only the first N parameters
         var handlerConstant = Expression.Constant(handler);
         var handlerParams = methodParamExpressions.Take(handlerParamTypes.Length).ToArray();
         var invokeExpression = Expression.Invoke(handlerConstant, handlerParams);
-        
+
         // Build the correct Func<> delegate type
         var delegateTypeArgs = methodParams.Select(p => p.ParameterType).Append(returnType).ToArray();
         Type delegateType;
-        
+
         if (delegateTypeArgs.Length == 1)
         {
             // Func<TResult> - only return type
@@ -1040,10 +1192,10 @@ public sealed class Mock<T> where T : class
             };
             delegateType = funcType.MakeGenericType(delegateTypeArgs);
         }
-        
+
         // Create the lambda with the correct delegate type
         var lambdaExpression = Expression.Lambda(delegateType, invokeExpression, methodParamExpressions);
-        
+
         return lambdaExpression.Compile();
     }
 
@@ -1056,7 +1208,7 @@ public sealed class Mock<T> where T : class
     private static void ValidateAndSetupOnCall(MethodInfo method, Type[] handlerParamTypes, string parameterName)
     {
         var methodParams = method.GetParameters();
-        
+
         // Validate that the method has at least as many parameters as the handler expects
         if (methodParams.Length < handlerParamTypes.Length)
         {
@@ -1065,13 +1217,13 @@ public sealed class Mock<T> where T : class
                 $"The handler can only receive up to {methodParams.Length} parameter(s).",
                 parameterName);
         }
-        
+
         // Validate type compatibility for each handler parameter
         for (int i = 0; i < handlerParamTypes.Length; i++)
         {
             var methodParamType = methodParams[i].ParameterType;
             var handlerParamType = handlerParamTypes[i];
-            
+
             // The method parameter type must be assignable to the handler parameter type
             if (!handlerParamType.IsAssignableFrom(methodParamType))
             {
@@ -1237,7 +1389,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> OnCall<T1>(Expression<Func<T, object?>> expression, Action<T1> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        ValidateAndSetupOnCall(method, new[] { typeof(T1) }, nameof(handler));
+        ValidateAndSetupOnCall(method, [typeof(T1)], nameof(handler));
         var matcher = BuildArgMatcher(args);
         _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!));
         return this;
@@ -1263,7 +1415,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> OnCall<T1, T2>(Expression<Func<T, object?>> expression, Action<T1, T2> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2) }, nameof(handler));
+        ValidateAndSetupOnCall(method, [typeof(T1), typeof(T2)], nameof(handler));
         var matcher = BuildArgMatcher(args);
         _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!));
         return this;
@@ -1291,7 +1443,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> OnCall<T1, T2, T3>(Expression<Func<T, object?>> expression, Action<T1, T2, T3> handler)
     {
         var (method, args) = ExtractMethod(expression);
-        ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2), typeof(T3) }, nameof(handler));
+        ValidateAndSetupOnCall(method, [typeof(T1), typeof(T2), typeof(T3)], nameof(handler));
         var matcher = BuildArgMatcher(args);
         _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!, (T3)a[2]!));
         return this;
@@ -1339,7 +1491,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> OnCall<T1>(Expression<Action<T>> expression, Action<T1> handler)
     {
         var (method, args) = ExtractVoidMethod(expression);
-        ValidateAndSetupOnCall(method, new[] { typeof(T1) }, nameof(handler));
+        ValidateAndSetupOnCall(method, [typeof(T1)], nameof(handler));
         var matcher = BuildArgMatcher(args);
         _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!));
         return this;
@@ -1365,7 +1517,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> OnCall<T1, T2>(Expression<Action<T>> expression, Action<T1, T2> handler)
     {
         var (method, args) = ExtractVoidMethod(expression);
-        ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2) }, nameof(handler));
+        ValidateAndSetupOnCall(method, [typeof(T1), typeof(T2)], nameof(handler));
         var matcher = BuildArgMatcher(args);
         _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!));
         return this;
@@ -1393,7 +1545,7 @@ public sealed class Mock<T> where T : class
     public Mock<T> OnCall<T1, T2, T3>(Expression<Action<T>> expression, Action<T1, T2, T3> handler)
     {
         var (method, args) = ExtractVoidMethod(expression);
-        ValidateAndSetupOnCall(method, new[] { typeof(T1), typeof(T2), typeof(T3) }, nameof(handler));
+        ValidateAndSetupOnCall(method, [typeof(T1), typeof(T2), typeof(T3)], nameof(handler));
         var matcher = BuildArgMatcher(args);
         _proxy.OnInvocation(method, matcher, a => handler((T1)a[0]!, (T2)a[1]!, (T3)a[2]!));
         return this;
