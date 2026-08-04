@@ -15,7 +15,8 @@ namespace BbQ.MockLite;
 /// <item>
 ///   <term><see cref="GenerateMockAttribute"/></term>
 ///   <description>
-///   Applied directly to interfaces: <c>[GenerateMock] public interface IMyInterface { }</c>
+///   Applied directly to interfaces:
+///   <c>[GenerateMock(typeof(IMyInterface))] public interface IMyInterface { }</c>
 ///   </description>
 /// </item>
 /// <item>
@@ -29,7 +30,7 @@ namespace BbQ.MockLite;
 /// </remarks>
 /// <example>
 /// <code>
-/// [GenerateMock]
+/// [GenerateMock(typeof(IUserRepository))]
 /// public interface IUserRepository
 /// {
 ///     User GetUser(string id);
@@ -37,7 +38,7 @@ namespace BbQ.MockLite;
 /// }
 /// 
 /// // In your test:
-/// var mock = Mock.Of&lt;IUserRepository&gt;();
+/// var mock = new MockUserRepository();
 /// mock.SetupGetUser(id => new User { Id = id, Name = "Test" });
 /// var user = mock.GetUser("123");
 /// mock.VerifyGetUser(Times.Once);

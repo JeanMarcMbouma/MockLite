@@ -10,7 +10,7 @@ A lightweight, high-performance mocking framework for .NET that combines compile
 - ⚡ **Async Support** - First-class support for async methods (`Task`, `Task<T>`, `ValueTask`, `ValueTask<T>`)
 - 📝 **Invocation Recording** - Automatically records all method invocations with timestamps for verification
 - 🎯 **Argument Matching** - Pattern matching for mock setup and verification
-- 🔍 **Verification** - Flexible verification with Times predicates (`Once`, `Never`, `Exactly`, `AtLeast`, `AtMost`)
+- 🔍 **Verification** - Flexible verification with Times predicates (`Once`, `Never`, `Exactly`, `AtLeast`, `AtMost`, `Between`)
 - 🔗 **Callbacks** - Execute custom logic when methods are called or properties are accessed
 - 💎 **Strongly-Typed Handlers** - Type-safe Setup and OnCall with partial parameter signatures
 - 🎓 **Easy API** - Simple, intuitive API inspired by popular mocking frameworks
@@ -19,11 +19,14 @@ A lightweight, high-performance mocking framework for .NET that combines compile
 
 ### Installation
 
-Add BbQ.MockLite to your project:
+Add the runtime package to your project. Add the generator package as well when you want source-generated mocks:
 
 ```bash
 dotnet add package BbQ.MockLite
+dotnet add package BbQ.MockLite.Generators
 ```
+
+`BbQ.MockLite` contains the runtime and fluent API. `BbQ.MockLite.Generators` is a compile-time analyzer package and is only required for `[GenerateMock]` and generated `MockXxx` types.
 
 ### Basic Usage
 
@@ -31,26 +34,27 @@ dotnet add package BbQ.MockLite
 using BbQ.MockLite;
 
 // 1. Define your interface
-[GenerateMock]
+[GenerateMock(typeof(IUserRepository))]
 public interface IUserRepository
 {
     User? GetUser(string userId);
     void SaveUser(User user);
 }
 
-// 2. Create a mock
-var userRepo = Mock.Of<IUserRepository>();
+// 2. Create the generated mock so its setup/verify API is available
+var userRepo = new MockUserRepository();
 
 // 3. Setup behavior
 var testUser = new User { Id = "123", Name = "John Doe" };
-// For generated mocks: userRepo.SetupGetUser(userId => testUser);
-// Or use the convenience: userRepo.GetUserReturns(testUser);
+userRepo.SetupGetUser(userId => testUser);
+// Or use the constant-value convenience method:
+// userRepo.GetUserReturns(testUser);
 
 // 4. Use in tests
 var user = userRepo.GetUser("123");
 
 // 5. Verify interactions
-// For generated mocks: userRepo.VerifyGetUser(Times.Once);
+userRepo.VerifyGetUser(Times.Once);
 ```
 
 ## Advanced Setup and Verification with Fluent API
@@ -88,9 +92,13 @@ var user = mock.GetUser("123");
 var isActive = mock.IsActive;
 mock.SaveUser(new User { Id = "123", Name = "John Doe" });
 
-// Verify method invocations
-builder.Verify(x => x.GetUser("123"), times => times == 1);
-builder.Verify(x => x.GetUser("456"), times => times == 0);
+// Verify method invocations. The expression selects the method;
+// use the matcher overload when arguments matter.
+builder.Verify(x => x.GetUser(It.IsAny<string>()), Times.Once);
+builder.Verify(
+    x => x.GetUser(It.IsAny<string>()),
+    args => (string)args[0]! == "123",
+    Times.Once);
 
 // Verify void method invocations
 builder.Verify(x => x.SaveUser(new User { Id = "123", Name = "John Doe" }), Times.Once);
@@ -109,6 +117,7 @@ foreach (var invocation in builder.Invocations)
 ### Fluent API Features
 
 **Setup Methods:**
+
 - `Setup<TResult>(expression, behavior)` - Configure method return values
 - `Setup<TResult>(expression)` - Begin a fluent setup returning `SetupPhrase<TResult>` for chaining `.Callback()`, `.Returns()`, `.ReturnsAsync()`, or `.Throws()`
 - `Setup<TResult, T1>(expression, handler)` - Configure with strongly-typed handler receiving first parameter
@@ -122,11 +131,15 @@ foreach (var invocation in builder.Invocations)
 - `SetupSequence<TResult>(expression, values)` - Return different values on successive calls (last value repeats)
 - `Throws<TResult>(expression, exception)` - Throw an exception when a return-value method is called
 - `Throws(expression, exception)` - Throw an exception when a void method is called
+- `SetReturnsDefault<TDefault>(value)` - Set the fallback value for every unconfigured method returning `TDefault` on this mock
 
 **Fluent SetupPhrase Methods** (returned by `Setup(expression)`):
+
 - `.Returns(value)` - Configure a constant return value
 - `.Returns(factory)` - Configure a factory-based return value
+- `.Returns<T1>(factory)`, `.Returns<T1, T2>(factory)`, `.Returns<T1, T2, T3>(factory)` - Compute a value from the method's first one to three arguments
 - `.ReturnsAsync<TInner>(value)` - Configure a `Task<T>` return with covariance support
+- `.ReturnsAsync<T1, TInner>(factory)`, `.ReturnsAsync<T1, T2, TInner>(factory)`, `.ReturnsAsync<T1, T2, T3, TInner>(factory)` - Compute the inner `Task<T>` value from the method's first one to three arguments
 - `.Throws(exception)` - Configure the method to throw an exception
 - `.Callback(callback)` - Register a parameterless callback (returns `SetupPhrase` for further chaining)
 - `.Callback(callback)` - Register a callback receiving the raw `object?[]` arguments
@@ -135,25 +148,28 @@ foreach (var invocation in builder.Invocations)
 - `.Callback<T1, T2, T3>(callback)` - Register a strongly-typed callback for the first three parameters
 
 **Fluent GetSetupPhrase Methods** (returned by `SetupGet(property)`):
+
 - `.Returns(value)` - Configure a constant return value for the property getter
 - `.Returns(factory)` - Configure a factory-based return value for the property getter
 - `.Throws(exception)` - Configure the property getter to throw an exception
 - `.Callback(callback)` - Register a parameterless callback when the getter is accessed (returns `GetSetupPhrase` for further chaining)
 
 **Fluent SetSetupPhrase Methods** (returned by `SetupSet(property)`):
+
 - `.Throws(exception)` - Configure the property setter to throw an exception
 - `.Callback(Action)` - Register a parameterless callback when the setter is called (returns `SetSetupPhrase` for further chaining)
 - `.Callback(Action<TProp>)` - Register a strongly-typed callback receiving the assigned value (returns `SetSetupPhrase` for further chaining)
 
 **Verification Methods:**
-- `Verify<TResult>(expression, times)` - Verify a return-value method was called N times
-- `Verify(voidExpression, times)` - Verify a void method was called N times
-- `Verify(expression, matcher, times)` - Verify method with argument matching
-- `VerifyGet<TProp>(property, times)` - Verify property getter access count
-- `VerifySet<TProp>(property, times)` - Verify property setter call count
-- `VerifySet<TProp>(property, matcher, times)` - Verify property setter with value matching
+
+- `Verify(expression, times, message?)` - Verify a return-value or void method call count; the expression selects the method, not its arguments
+- `Verify(expression, matcher, times, message?)` - Verify a return-value method with explicit `object?[]` argument matching
+- `VerifyGet<TProp>(property, times, message?)` - Verify property getter access count
+- `VerifySet<TProp>(property, times, message?)` - Verify property setter call count
+- `VerifySet<TProp>(property, matcher, times, message?)` - Verify property setter with value matching
 
 **Callback Methods:**
+
 - `OnCall(expression, callback)` - Execute logic when method is called
 - `OnCall(expression, handler)` - Execute logic with no parameters when method is called
 - `OnCall<T1>(expression, handler)` - Execute logic with strongly-typed first parameter
@@ -166,11 +182,15 @@ foreach (var invocation in builder.Invocations)
 - `OnSetCallback<T>(property, matcher, callback)` - Execute logic when property setter is called with matching value
 
 **Reset Method:**
+
 - `Reset()` - Clear all recorded invocations (setups and callbacks are preserved)
 
 **Properties:**
+
 - `Object` - Get the mock instance
 - `Invocations` - Access all recorded invocations for custom verification
+
+For exact signatures, generated-member naming, attributes, matchers, defaults, and supporting types, see the [Public API Reference](./PUBLIC_API.md).
 
 ## Strongly-Typed Callbacks with Partial Parameters
 
@@ -200,6 +220,16 @@ builder.Setup(x => x.Query("proc", 1, 2),
 // Parameterless handler (doesn't need any parameters)
 builder.Setup(x => x.Query("proc", 1, 2), 
     () => "Fixed result");
+```
+
+The same argument-aware factories are available in the phrase API, including async results:
+
+```csharp
+builder.Setup(x => x.Query(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+    .Returns((string proc, int id) => $"{proc}-{id}");
+
+builder.Setup(x => x.QueryAsync(It.IsAny<string>(), It.IsAny<int>()))
+    .ReturnsAsync((string proc, int id) => $"{proc}-{id}");
 ```
 
 ### OnCall with Strongly-Typed Handlers
@@ -378,6 +408,7 @@ Assert.Equal(2, auditLog.Count);
 ### Callback Patterns
 
 **Track method calls:**
+
 ```csharp
 var callCount = 0;
 // Parameterless callback
@@ -386,6 +417,7 @@ mock.OnCall(x => x.Process(It.IsAny<string>()),
 ```
 
 **Type-safe parameter access:**
+
 ```csharp
 var processedItems = new List<string>();
 // Strongly-typed callback
@@ -394,6 +426,7 @@ mock.OnCall(x => x.Process(It.IsAny<string>()),
 ```
 
 **Conditional callbacks:**
+
 ```csharp
 var adminActions = new List<string>();
 // Mix of type-safe handlers and matchers
@@ -404,6 +437,7 @@ mock.OnCall(
 ```
 
 **Track property access:**
+
 ```csharp
 var propertyLog = new List<string>();
 mock
@@ -486,6 +520,17 @@ mock.GetUser("123");
 builder.Verify(x => x.GetUser("123"), Times.Once);
 ```
 
+## Custom Default Return Values
+
+Runtime mocks return smart defaults for unconfigured methods: completed tasks, default values for value types, and empty arrays for common collection interfaces. Override the fallback for a return type on one mock with `SetReturnsDefault<T>()`:
+
+```csharp
+var builder = Mock.Create<IUserRepository>()
+    .SetReturnsDefault<User?>(new User { Id = "fallback" });
+
+var user = builder.Object.GetUser("not-configured");
+```
+
 ## Two-Tier Mocking Strategy
 
 BbQ.MockLite uses an intelligent two-tier approach:
@@ -495,7 +540,7 @@ BbQ.MockLite uses an intelligent two-tier approach:
 Mark interfaces with `[GenerateMock]` attribute to generate optimized mock implementations at compile time:
 
 ```csharp
-[GenerateMock]
+[GenerateMock(typeof(IPaymentGateway))]
 public interface IPaymentGateway
 {
     bool ProcessPayment(decimal amount);
@@ -503,7 +548,7 @@ public interface IPaymentGateway
 }
 
 // The BbQ.MockLite generator creates: MockPaymentGateway class
-var mock = Mock.Of<IPaymentGateway>();
+var mock = new MockPaymentGateway();
 
 // Generated convenience methods follow {MethodName}{Action} naming:
 mock.SetupProcessPayment(amount => amount > 0);       // Setup{Method}(behavior)
@@ -512,7 +557,16 @@ mock.ProcessPaymentAsyncReturns(true);                 // async: wraps in Task.F
 mock.VerifyProcessPayment(Times.Once);                 // Verify{Method}(times)
 ```
 
+For third-party interfaces that cannot be annotated directly, place the generic attribute on a class. Multiple attributes may be applied to the same class:
+
+```csharp
+[GenerateMock<IExternalPaymentGateway>]
+[GenerateMock<IExternalClock>]
+public partial class TestMocks { }
+```
+
 **Benefits:**
+
 - Zero runtime overhead
 - IntelliSense support for mock-specific methods
 - Ahead-of-time compilation compatible
@@ -533,6 +587,7 @@ var mock = Mock.Of<IQuickMock>(); // Automatically creates runtime proxy
 ```
 
 **Benefits:**
+
 - Quick testing without code generation
 - No attribute decorators needed
 - Useful for third-party interfaces
@@ -557,24 +612,29 @@ builder.Setup(
     (string id) => new User { Id = id, IsAdmin = true });
 
 // Use matchers in verification
-builder.Verify(x => x.GetUser(It.IsAny<string>()), Times.AtLeast(1));
-builder.Verify(x => x.GetUser(It.Matches<string>(id => id.Length > 5)), Times.Once);
+// Runtime Verify needs its explicit object[] matcher when arguments matter.
+builder.Verify(
+    x => x.GetUser(It.IsAny<string>()),
+    args => args[0] is string id && id.Length > 5,
+    Times.Once);
 ```
+
+`It.IsAny<T>()` and `It.Matches<T>()` are interpreted inside runtime `Setup` expressions. Source-generated `Verify{Method}` overloads instead take one typed predicate per method parameter, for example `mock.VerifyGetUser(id => id.Length > 5, Times.Once)`.
 
 ### Invocation Recording
 
 All method calls on mocks are automatically recorded:
 
 ```csharp
-var mock = Mock.Of<IRepository>();
+var builder = Mock.Create<IRepository>();
+var mock = builder.Object;
 mock.GetUser("123");
 mock.GetUser("456");
 
 // Access invocations for custom verification
-var invocations = ((dynamic)mock).Invocations;
-foreach (var invocation in invocations)
+foreach (var invocation in builder.Invocations)
 {
-    Console.WriteLine($"{invocation.Method.Name} called with {invocation.Arguments}");
+    Console.WriteLine(invocation); // method, arguments, and UTC timestamp
 }
 ```
 
@@ -583,8 +643,6 @@ foreach (var invocation in invocations)
 Verify method call counts with flexible predicates:
 
 ```csharp
-var mock = Mock.Of<IService>();
-
 // Example predicates:
 Times.Once           // Exactly 1 call
 Times.Never          // Exactly 0 calls
@@ -599,14 +657,22 @@ Times.Between(2, 5)  // At least 2 and at most 5 calls (inclusive)
 BbQ.MockLite fully supports async methods:
 
 ```csharp
+[GenerateMock(typeof(IAsyncRepository))]
 public interface IAsyncRepository
 {
     Task<User?> GetUserAsync(string userId);
     ValueTask SaveUserAsync(User user);
 }
 
-var mock = Mock.Of<IAsyncRepository>();
-// Setup and verify async methods seamlessly
+var mock = new MockAsyncRepository();
+// Source-generated shorthand wraps the value in Task.FromResult.
+mock.GetUserAsyncReturns(new User { Id = "123" });
+var user = await mock.GetUserAsync("123");
+
+// Runtime fluent API supports Task<T> via ReturnsAsync.
+var runtime = Mock.Create<IAsyncRepository>();
+runtime.Setup(x => x.GetUserAsync(It.IsAny<string>()))
+    .ReturnsAsync((string id) => new User { Id = id });
 ```
 
 ## Project Structure
@@ -706,7 +772,7 @@ test configuration, or for third-party interfaces where source generation is not
 
 ## Architecture
 
-```
+```text
 BbQ.MockLite Framework
 ├── Source Generators (Compile-time)
 │   └── Generates optimized MockXxx classes from [GenerateMock] interfaces
@@ -751,6 +817,8 @@ See the [BbQ.MockLite.Sample](./src/MockLite.Sample/Program.cs) project for comp
 ## Documentation
 
 For detailed documentation on callbacks and advanced features, see:
+
+- [Public API Reference](./PUBLIC_API.md) - Runtime and generated API signatures and behavior
 - [Callback Feature Guide](./CALLBACK_FEATURE_GUIDE.md) - Complete API reference
 - [Callback Quick Reference](./CALLBACK_QUICK_REFERENCE.md) - Quick start and examples
 - [Feature Summary](./FEATURE_COMPLETE_SUMMARY.md) - Implementation overview
