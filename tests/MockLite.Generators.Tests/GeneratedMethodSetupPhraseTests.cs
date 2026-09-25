@@ -363,7 +363,7 @@ public class GeneratedMethodSetupPhraseTests
     {
         var mock = new MockUserService();
 
-        mock.SetupGetCount(category => category.StartsWith("special"))
+        mock.SetupGetCountMatching(category => category.StartsWith("special"))
             .Returns(category => category.Length);
 
         Assert.Equal(7, mock.GetCount("special"));
@@ -376,7 +376,7 @@ public class GeneratedMethodSetupPhraseTests
         var calls = new List<string>();
         var mock = new MockUserService();
 
-        mock.SetupGetCount(category => category.StartsWith("special"))
+        mock.SetupGetCountMatching(category => category.StartsWith("special"))
             .Callback(category => calls.Add(category))
             .Returns(category => category.Length);
 
