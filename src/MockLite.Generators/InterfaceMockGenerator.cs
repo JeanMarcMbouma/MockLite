@@ -825,8 +825,7 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine($"    public readonly struct {structName}");
         sb.AppendLine("    {");
         sb.AppendLine($"        private readonly {className} _mock;");
-        sb.AppendLine("        private readonly Func<object?[], bool>? _matcher;");
-        sb.AppendLine($"        internal {structName}({className} mock, Func<object?[], bool>? matcher = null) {{ _mock = mock; _matcher = matcher; }}");
+        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
         sb.AppendLine($"        public {className} Returns({type} value) {{ _mock.{GetBehaviorFieldName(p)} = () => value; return _mock; }}");
         sb.AppendLine($"        public {className} Returns(Func<{type}> factory) {{ _mock.{GetBehaviorFieldName(p)} = factory; return _mock; }}");
         sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{GetBehaviorFieldName(p)} = () => throw ex; return _mock; }}");
@@ -844,8 +843,7 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine($"    public readonly struct {structName}");
         sb.AppendLine("    {");
         sb.AppendLine($"        private readonly {className} _mock;");
-        sb.AppendLine("        private readonly Func<object?[], bool>? _matcher;");
-        sb.AppendLine($"        internal {structName}({className} mock, Func<object?[], bool>? matcher = null) {{ _mock = mock; _matcher = matcher; }}");
+        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
         sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{SetBehaviorFieldName(p)} = _ => throw ex; return _mock; }}");
         sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{SetBehaviorFieldName(p)} = _ => callback(); return this; }}");
         sb.AppendLine($"        public {structName} Callback(Action<{type}> callback) {{ _mock.{SetBehaviorFieldName(p)} = callback; return this; }}");
