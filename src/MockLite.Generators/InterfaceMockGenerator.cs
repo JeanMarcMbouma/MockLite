@@ -21,7 +21,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             var source = GenerateMockSource(compilation, iface);
             var className = GetMockClassName(iface.Name);
-            context.AddSource($"{className}.g.cs", source);
+            var hintName = SanitizeIdentifier(iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) + ".g.cs";
+            context.AddSource(hintName, source);
         }
     }
 
@@ -75,6 +76,29 @@ public class InterfaceMockGenerator : ISourceGenerator
         => (ifaceName.Length > 1 && ifaceName[0] == 'I' && char.IsUpper(ifaceName[1]))
             ? $"Mock{ifaceName.Substring(1)}"
             : $"Mock{ifaceName}";
+
+    private static string SanitizeIdentifier(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (var ch in value)
+            sb.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');
+        return sb.ToString();
+    }
+
+    private static bool HasOverloads(IMethodSymbol method)
+    {
+        var all = method.ContainingType.GetMembers(method.Name).OfType<IMethodSymbol>()
+            .Concat(method.ContainingType.AllInterfaces.SelectMany(i => i.GetMembers(method.Name).OfType<IMethodSymbol>()));
+        return all.Select(SignatureHash).Distinct(StringComparer.Ordinal).Skip(1).Any();
+    }
+
+    private static string MethodApiName(IMethodSymbol method)
+    {
+        if (!HasOverloads(method)) return method.Name;
+        var hash = Convert.ToBase64String(Encoding.UTF8.GetBytes(SignatureHash(method)))
+            .TrimEnd('=').Replace('+', '_').Replace('/', '-');
+        return $"{method.Name}_{hash}";
+    }
 
     /// <summary>
     /// Collects all methods from the interface and its entire inheritance hierarchy,
@@ -152,7 +176,8 @@ public class InterfaceMockGenerator : ISourceGenerator
 
         if (!string.IsNullOrEmpty(ns)) sb.AppendLine($"namespace {ns} {{");
         sb.AppendLine("[GeneratedMock]");
-        sb.AppendLine($"public sealed class {className} : {ifaceDisplay}");
+        var classTypeParams = iface.TypeParameters.Length == 0 ? "" : "<" + string.Join(", ", iface.TypeParameters.Select(tp => tp.Name)) + ">";
+        sb.AppendLine($"public sealed class {className}{classTypeParams} : {ifaceDisplay}");
         sb.AppendLine("{");
         sb.AppendLine("    public List<Invocation> Invocations { get; } = new();");
 
@@ -185,7 +210,7 @@ public class InterfaceMockGenerator : ISourceGenerator
             }
             if (p.SetMethod is not null)
                 sb.AppendLine($"    public Action<{TypeDisplay(p.Type)}>? {SetBehaviorFieldName(p)} {{ get; set; }}");
-            sb.AppendLine($"    private {TypeDisplay(p.Type)}? _{p.Name};");
+            sb.AppendLine($"    private {TypeDisplay(p.Type)} _{p.Name} = default!;");
         }
 
         // Static cached MethodInfo fields for property accessors.
@@ -446,7 +471,7 @@ public class InterfaceMockGenerator : ISourceGenerator
     {
         var field = BehaviorFieldName(m);
         var behaviorType = BehaviorDelegateType(m);
-        return $"    public {className} Setup{m.Name}({behaviorType} behavior) {{ {field} = behavior; return this; }}\n";
+        var apiName = MethodApiName(m);\n        return $"    public {className} Setup{apiName}({behaviorType} behavior) {{ {field} = behavior; return this; }}\\n";
     }
 
     private static string EmitMethodSetupWithMatcher(IMethodSymbol m, string className)
@@ -458,7 +483,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         var conj = m.Parameters.Length == 0 ? "true" : string.Join(" && ", m.Parameters.Select(p => $"{p.Name}Matcher({p.Name})"));
 
         var sb = new StringBuilder();
-        sb.AppendLine($"    public {className} Setup{m.Name}({matcherSig}{(matcherSig.Length > 0 ? ", " : "")} {BehaviorDelegateType(m)} behavior)");
+        var apiName = MethodApiName(m);
+        sb.AppendLine($"    public {className} Setup{apiName}({matcherSig}{(matcherSig.Length > 0 ? ", " : "")} {BehaviorDelegateType(m)} behavior)");
         sb.AppendLine("    {");
         if (ret == "void")
         {
@@ -467,7 +493,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         else if (ret == "Task" || ret.StartsWith("Task<") || ret == "ValueTask" || ret.StartsWith("ValueTask<"))
         {
             // For async methods, the behavior already returns the correct async type
-            sb.AppendLine($"        {field} = ({args}) => ({conj}) ? behavior({args}) : GetDefault{m.Name}();");
+            sb.AppendLine($"        {field} = ({args}) => ({conj}) ? behavior({args}) : GetDefault{MethodApiName(m)}();");
             sb.AppendLine("        return this;");
             sb.AppendLine("    }");
             sb.AppendLine();
@@ -495,7 +521,7 @@ public class InterfaceMockGenerator : ISourceGenerator
             {
                 def = SmartDefault(m.ReturnType);
             }
-            sb.AppendLine($"    private static {ret} GetDefault{m.Name}() => {def};");
+            sb.AppendLine($"    private static {ret} GetDefault{MethodApiName(m)}() => {def};");
             return sb.ToString();
         }
         else
@@ -518,24 +544,24 @@ public class InterfaceMockGenerator : ISourceGenerator
         if (ret.StartsWith("Task<"))
         {
             var tArg = ret.Substring(5, ret.Length - 6);
-            sb.AppendLine($"    public {className} {m.Name}Returns({tArg} result) {{ {field} = ({args}) => Task.FromResult(result); return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({tArg} result) {{ {field} = ({args}) => Task.FromResult(result); return this; }}");
         }
         else if (ret == "Task")
         {
-            sb.AppendLine($"    public {className} {m.Name}Returns() {{ {field} = ({args}) => Task.CompletedTask; return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns() {{ {field} = ({args}) => Task.CompletedTask; return this; }}");
         }
         else if (ret.StartsWith("ValueTask<"))
         {
             var tArg = ret.Substring(10, ret.Length - 11);
-            sb.AppendLine($"    public {className} {m.Name}Returns({tArg} result) {{ {field} = ({args}) => new ValueTask<{tArg}>(result); return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({tArg} result) {{ {field} = ({args}) => new ValueTask<{tArg}>(result); return this; }}");
         }
         else if (ret == "ValueTask")
         {
-            sb.AppendLine($"    public {className} {m.Name}Returns() {{ {field} = ({args}) => default; return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns() {{ {field} = ({args}) => default; return this; }}");
         }
         else if (ret != "void")
         {
-            sb.AppendLine($"    public {className} {m.Name}Returns({ret} result) {{ {field} = ({args}) => result; return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({ret} result) {{ {field} = ({args}) => result; return this; }}");
         }
         return sb.ToString();
     }
@@ -551,7 +577,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         var ret = TypeDisplay(m.ReturnType);
         var args = string.Join(", ", m.Parameters.Select(p => p.Name));
         var behaviorType = BehaviorDelegateType(m);
-        var structName = $"SetupPhrase_{m.Name}";
+        var apiName = MethodApiName(m);
+        var structName = $"SetupPhrase_{apiName}";
         var sb = new StringBuilder();
 
         sb.AppendLine($"    public readonly struct {structName}");
@@ -602,16 +629,18 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField} = callback; return this; }}");
 
         sb.AppendLine("    }");
-        sb.AppendLine($"    public {structName} Setup{m.Name}() => new {structName}(this);");
+        sb.AppendLine($"    public {structName} Setup{apiName}() => new {structName}(this);");
         return sb.ToString();
     }
 
     private static string EmitMethodVerify(IMethodSymbol m)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"    public void Verify{m.Name}(Func<int, bool> times, string? message = null)");
+        var apiName = MethodApiName(m);
+        var miField = MethodInfoFieldName(m);
+        sb.AppendLine($"    public void Verify{apiName}(Func<int, bool> times, string? message = null)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        var count = Invocations.Count(i => i.Method.Name == nameof({m.Name}));");
+        sb.AppendLine($"        var count = Invocations.Count(i => i.Method == {miField});");
         sb.AppendLine($"        if (!times(count)) throw new VerificationException(BuildMessage(nameof({m.Name}), times, count, message));");
         sb.AppendLine("    }");
         return sb.ToString();
@@ -621,9 +650,11 @@ public class InterfaceMockGenerator : ISourceGenerator
     {
         var matcherSig = string.Join(", ", m.Parameters.Select(p => $"Func<{TypeDisplay(p.Type)}, bool> {p.Name}Matcher"));
         var sb = new StringBuilder();
-        sb.AppendLine($"    public void Verify{m.Name}({matcherSig}{(matcherSig.Length > 0 ? ", " : "")}Func<int, bool> times, string? message = null)");
+        var apiName = MethodApiName(m);
+        var miField = MethodInfoFieldName(m);
+        sb.AppendLine($"    public void Verify{apiName}({matcherSig}{(matcherSig.Length > 0 ? ", " : "")}Func<int, bool> times, string? message = null)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        var count = Invocations.Count(i => i.Method.Name == nameof({m.Name}) && {BuildArgMatcherPredicate(m)});");
+        sb.AppendLine($"        var count = Invocations.Count(i => i.Method == {miField} && {BuildArgMatcherPredicate(m)});");
         sb.AppendLine($"        if (!times(count)) throw new VerificationException(BuildMessage(nameof({m.Name}), times, count, message));");
         sb.AppendLine("    }");
         return sb.ToString();
