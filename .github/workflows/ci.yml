@@ -20,3 +20,31 @@ jobs:
       - run: dotnet restore
       - run: dotnet build --configuration Release
       - run: dotnet test --configuration Release --no-build
+      - name: Pack consumer artifacts
+        run: |
+          dotnet pack src/MockLite.Core/MockLite.Core.csproj --configuration Release --no-build -o ./artifacts /p:PackageVersion=0.0.0-ci
+          dotnet pack src/MockLite.Generators/MockLite.Generators.csproj --configuration Release --no-build -o ./artifacts /p:PackageVersion=0.0.0-ci
+      - name: Smoke test packed packages
+        run: |
+          mkdir -p /tmp/mocklite-consumer
+          cd /tmp/mocklite-consumer
+          dotnet new console --framework net8.0
+          dotnet add package BbQ.MockLite --version 0.0.0-ci --source "$GITHUB_WORKSPACE/artifacts"
+          dotnet add package BbQ.MockLite.Generators --version 0.0.0-ci --source "$GITHUB_WORKSPACE/artifacts"
+          cat > Program.cs <<'EOF'
+          using BbQ.MockLite;
+
+          [GenerateMock]
+          public interface ICounter
+          {
+              int Count { get; set; }
+              string Find(int id);
+              string Find(string key);
+          }
+
+          var mock = new MockCounter();
+          mock.Count = 3;
+          if (mock.Count != 3) throw new Exception("Generated property smoke test failed.");
+          Console.WriteLine("MockLite package smoke test passed.");
+          EOF
+          dotnet run
