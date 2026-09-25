@@ -5,6 +5,19 @@ This reference describes the supported user-facing API in the `BbQ.MockLite` nam
 - Source-generated `MockXxx` types provide member-specific setup and verification methods.
 - Runtime mocks, created with `Mock.Create<T>()`, provide the expression-based `Mock<T>` fluent API.
 
+## 2.x interaction semantics
+
+MockLite 2.x makes expression intent explicit and consistent across setup, callback, and verification:
+
+- `Verify(expression, times)` matches the method **and the arguments in the expression**. Exact values use equality, `It.IsAny<T>()` is a wildcard, and `It.Matches<T>()` evaluates its predicate.
+- `VerifyAnyArguments(expression, times)` performs an intentional method-wide count when argument values should be ignored.
+- A callback chained from `Setup(expression)` inherits the same argument matcher as that setup. Use `OnCall` for an independently registered method hook.
+- When multiple runtime or generated setups can match an invocation, the **most recently registered matching setup wins**.
+- Runtime and generated invocation collections are exposed as snapshots for verification/inspection; generated mocks provide `Reset()` to clear their concurrent invocation queue.
+
+These are deliberate 2.x behavior changes from 1.x, where ordinary `Verify` ignored expression arguments and fluent setup callbacks were method-wide.
+
+
 ## Packages
 
 ```bash
