@@ -412,7 +412,7 @@ public class GeneratedMethodSetupPhraseTests
             .Returns(key => $"matched:{key}");
 
         Assert.Equal("matched:cfg-main", mock.Read("cfg-main"));
-        Assert.Equal(string.Empty, mock.Read("other"));
+        Assert.Null(mock.Read("other"));
     }
 
 
