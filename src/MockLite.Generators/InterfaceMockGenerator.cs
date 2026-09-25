@@ -177,7 +177,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         if (!string.IsNullOrEmpty(ns)) sb.AppendLine($"namespace {ns} {{");
         sb.AppendLine("[GeneratedMock]");
         var classTypeParams = iface.TypeParameters.Length == 0 ? "" : "<" + string.Join(", ", iface.TypeParameters.Select(tp => tp.Name)) + ">";
-        sb.AppendLine($"public sealed class {className}{classTypeParams} : {ifaceDisplay}");
+        var classTypeName = className + classTypeParams;
+        sb.AppendLine($"public sealed class {classTypeName} : {ifaceDisplay}");
         sb.AppendLine("{");
         sb.AppendLine("    public List<Invocation> Invocations { get; } = new();");
 
@@ -230,12 +231,12 @@ public class InterfaceMockGenerator : ISourceGenerator
             // Setup/SetupWithMatcher/Returns helpers.  Verify by method name still works.
             if (!m.IsGenericMethod)
             {
-                sb.Append(EmitMethodSetup(m, className));
+                sb.Append(EmitMethodSetup(m, classTypeName));
                 // Skip matcher overloads for parameterless methods (signatures would be identical).
                 if (m.Parameters.Length > 0)
-                    sb.Append(EmitMethodSetupWithMatcher(m, className));
-                sb.Append(EmitMethodReturns(m, className));
-                sb.Append(EmitMethodPhraseStruct(m, className));
+                    sb.Append(EmitMethodSetupWithMatcher(m, classTypeName));
+                sb.Append(EmitMethodReturns(m, classTypeName));
+                sb.Append(EmitMethodPhraseStruct(m, classTypeName));
             }
             sb.Append(EmitMethodVerify(m));
             if (m.Parameters.Length > 0 && !m.IsGenericMethod)
@@ -248,15 +249,15 @@ public class InterfaceMockGenerator : ISourceGenerator
             sb.Append(EmitPropertyImplementation(p));
             if (p.GetMethod is not null)
             {
-                sb.Append(EmitPropertyGetSetup(p, className));
-                sb.Append(EmitPropertyGetPhraseStruct(p, className));
+                sb.Append(EmitPropertyGetSetup(p, classTypeName));
+                sb.Append(EmitPropertyGetPhraseStruct(p, classTypeName));
                 sb.Append(EmitPropertyGetVerify(p));
             }
             if (p.SetMethod is not null)
             {
-                sb.Append(EmitPropertySetSetup(p, className));
-                sb.Append(EmitPropertySetSetupWithMatcher(p, className));
-                sb.Append(EmitPropertySetPhraseStruct(p, className));
+                sb.Append(EmitPropertySetSetup(p, classTypeName));
+                sb.Append(EmitPropertySetSetupWithMatcher(p, classTypeName));
+                sb.Append(EmitPropertySetPhraseStruct(p, classTypeName));
                 sb.Append(EmitPropertySetVerify(p));
                 sb.Append(EmitPropertySetVerifyWithMatcher(p));
             }
