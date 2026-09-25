@@ -823,6 +823,7 @@ See the [BbQ.MockLite.Sample](./src/MockLite.Sample/Program.cs) project for comp
 For detailed documentation on callbacks and advanced features, see:
 
 - [MockLite 2.0 Migration Guide](./MIGRATION_2.0.md) - Breaking interaction changes and upgrade checklist
+- [Analyzer Status](./ANALYZERS.md) - Implemented and reserved diagnostic IDs
 - [Public API Reference](./PUBLIC_API.md) - Runtime and generated API signatures and behavior
 - [Callback Feature Guide](./CALLBACK_FEATURE_GUIDE.md) - Complete API reference
 - [Callback Quick Reference](./CALLBACK_QUICK_REFERENCE.md) - Quick start and examples
