@@ -977,7 +977,7 @@ public sealed class Mock<T> where T : class
         {
             // Detect It.IsAny<T>() directly from the expression tree.
             if (mce.Method.Name == nameof(It.IsAny) && mce.Arguments.Count == 0)
-                return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
+                return It.AnyMatcher.Instance;
 
             // Detect It.Matches<T>(predicate) and capture the predicate.
             // Extract the predicate directly from the expression tree, handling
