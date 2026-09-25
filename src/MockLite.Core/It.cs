@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace BbQ.MockLite;
 
@@ -41,13 +42,12 @@ public static class It
     /// </summary>
     /// <typeparam name="T">The type of argument to match.</typeparam>
     /// <returns>
-    /// The default value of <typeparamref name="T"/>. The matcher is recognized from
-    /// the expression tree before this method is evaluated.
+    /// A marker value that indicates any value of type T should match.
     /// </returns>
     /// <remarks>
-    /// This method is intended for MockLite expression APIs such as <c>Setup</c>.
-    /// Matcher identity is carried by expression parsing rather than by reinterpreting
-    /// an internal marker as an arbitrary user type.
+    /// This is used in <c>Setup</c> and <c>Verify</c> calls to indicate that any value
+    /// of the specified type should match, regardless of the actual value.
+    /// The returned value is an internal marker that the framework recognizes as a wildcard matcher.
     /// </remarks>
     /// <example>
     /// <code>
@@ -55,7 +55,11 @@ public static class It
     /// mock.VerifyGetUser(It.IsAny&lt;string&gt;(), Times.Once);
     /// </code>
     /// </example>
-    public static T IsAny<T>() => default!;
+    public static T IsAny<T>()
+    {
+        var marker = AnyMatcher.Instance;
+        return Unsafe.As<AnyMatcher, T>(ref Unsafe.AsRef(in marker))!;
+    }
 
     /// <summary>
     /// Matches values that satisfy the specified predicate.
