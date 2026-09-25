@@ -34,6 +34,11 @@ jobs:
           cat > Program.cs <<'EOF'
           using BbQ.MockLite;
 
+          var mock = new MockCounter();
+          mock.Count = 3;
+          if (mock.Count != 3) throw new Exception("Generated property smoke test failed.");
+          Console.WriteLine("MockLite package smoke test passed.");
+
           [GenerateMock]
           public interface ICounter
           {
@@ -41,10 +46,5 @@ jobs:
               string Find(int id);
               string Find(string key);
           }
-
-          var mock = new MockCounter();
-          mock.Count = 3;
-          if (mock.Count != 3) throw new Exception("Generated property smoke test failed.");
-          Console.WriteLine("MockLite package smoke test passed.");
           EOF
           dotnet run
