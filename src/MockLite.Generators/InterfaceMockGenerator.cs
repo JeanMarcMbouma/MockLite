@@ -173,6 +173,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine("using System.Threading.Tasks;");
         sb.AppendLine("using System.Reflection;");
         sb.AppendLine("using BbQ.MockLite;");
+        foreach (var referencedNamespace in GetReferencedNamespaces(iface))
+            sb.AppendLine($"using {referencedNamespace};");
 
         if (!string.IsNullOrEmpty(ns)) sb.AppendLine($"namespace {ns} {{");
         sb.AppendLine("[GeneratedMock]");
@@ -294,6 +296,42 @@ public class InterfaceMockGenerator : ISourceGenerator
         }
 
         return sb.ToString();
+    }
+
+
+    private static IEnumerable<string> GetReferencedNamespaces(INamedTypeSymbol iface)
+    {
+        var namespaces = new HashSet<string>(StringComparer.Ordinal);
+
+        void AddType(ITypeSymbol type)
+        {
+            if (type is IArrayTypeSymbol array)
+            {
+                AddType(array.ElementType);
+                return;
+            }
+
+            if (type is not INamedTypeSymbol named) return;
+
+            var typeNamespace = named.ContainingNamespace;
+            if (typeNamespace is { IsGlobalNamespace: false })
+                namespaces.Add(typeNamespace.ToDisplayString());
+
+            foreach (var argument in named.TypeArguments)
+                AddType(argument);
+        }
+
+        foreach (var method in GetAllMethods(iface))
+        {
+            AddType(method.ReturnType);
+            foreach (var parameter in method.Parameters)
+                AddType(parameter.Type);
+        }
+
+        foreach (var property in GetAllProperties(iface))
+            AddType(property.Type);
+
+        return namespaces.OrderBy(x => x, StringComparer.Ordinal);
     }
 
     private static string TypeDisplay(ITypeSymbol t)
