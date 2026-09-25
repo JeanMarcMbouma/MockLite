@@ -27,6 +27,12 @@ namespace BbQ.MockLite.Generators.Tests.GenericRegression
     {
         T Find(string key);
     }
+
+    [GenerateMock]
+    public interface IConstrainedRepository<T> where T : class, new()
+    {
+        T Create();
+    }
 }
 
 
