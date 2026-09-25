@@ -15,6 +15,18 @@ public class V2GeneratedSemanticsTests
     }
 
     [Fact]
+    public void ConcurrentSetupRegistration_DoesNotCorruptGeneratedMock()
+    {
+        var mock = new MockUserService();
+
+        Parallel.For(0, 100, i =>
+            mock.SetupLookup(key => key == i.ToString(), key => key));
+
+        Parallel.For(0, 100, i =>
+            Assert.Equal(i.ToString(), mock.Lookup(i.ToString())));
+    }
+
+    [Fact]
     public void LaterBroadSetup_WinsWhenBothMatch()
     {
         var mock = new MockUserService();
