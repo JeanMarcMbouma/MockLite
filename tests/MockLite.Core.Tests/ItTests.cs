@@ -391,9 +391,8 @@ public class ItTests
         var r2 = mock.GetValue("no-match");
         var r3 = mock.GetValue("log-two");
 
-        // Assert - Callback fires for all invocations of the method (not scoped to matcher);
-        // Returns is scoped to the predicate match.
-        Assert.Equal(["log-one", "no-match", "log-two"], captured);
+        // v2: the callback and return behavior share the setup predicate.
+        Assert.Equal(["log-one", "log-two"], captured);
         Assert.Equal("logged", r1);
         Assert.Null(r2); // predicate doesn't match, returns default
         Assert.Equal("logged", r3);
