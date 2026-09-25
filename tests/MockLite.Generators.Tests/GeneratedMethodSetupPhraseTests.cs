@@ -343,4 +343,63 @@ public class GeneratedMethodSetupPhraseTests
         // Last setup wins
         Assert.Equal(5, mock.GetCount("hello"));
     }
+
+    [Fact]
+    public void SetupWrite_Callback_InfersExactMethodParameterTypes()
+    {
+        var calls = new List<string>();
+        var mock = new MockCompositeService();
+
+        mock.SetupWrite()
+            .Callback((key, value) => calls.Add($"{key}:{value}"))
+            .Throws(new InvalidOperationException("stop"));
+
+        Assert.Throws<InvalidOperationException>(() => mock.Write("alpha", "beta"));
+        Assert.Equal(new[] { "alpha:beta" }, calls);
+    }
+
+    [Fact]
+    public void SetupGetCount_WithTypedMatcher_ReturnsPhraseAndFiltersBehavior()
+    {
+        var mock = new MockUserService();
+
+        mock.SetupGetCount(category => category.StartsWith("special"))
+            .Returns(category => category.Length);
+
+        Assert.Equal(7, mock.GetCount("special"));
+        Assert.Equal(0, mock.GetCount("ordinary"));
+    }
+
+    [Fact]
+    public void SetupGetCount_WithTypedMatcher_FiltersTypedCallback()
+    {
+        var calls = new List<string>();
+        var mock = new MockUserService();
+
+        mock.SetupGetCount(category => category.StartsWith("special"))
+            .Callback(category => calls.Add(category))
+            .Returns(category => category.Length);
+
+        Assert.Equal(0, mock.GetCount("ordinary"));
+        Assert.Equal(9, mock.GetCount("special-x"));
+        Assert.Equal(new[] { "special-x" }, calls);
+    }
+
+    [Fact]
+    public void GeneratedSetups_MostRecentlyRegisteredMatchingSetupWins_AcrossApiShapes()
+    {
+        var mock = new MockUserService();
+
+        mock.SetupGetCount(category => 1);
+        mock.SetupGetCount().Returns(category => 2);
+        Assert.Equal(2, mock.GetCount("x"));
+
+        mock.GetCountReturns(3);
+        Assert.Equal(3, mock.GetCount("x"));
+
+        mock.SetupGetCount(category => category == "specific", category => 4);
+        Assert.Equal(4, mock.GetCount("specific"));
+        Assert.Equal(3, mock.GetCount("other"));
+    }
+
 }
