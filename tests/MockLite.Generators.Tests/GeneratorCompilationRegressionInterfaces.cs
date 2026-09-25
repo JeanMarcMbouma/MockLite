@@ -25,6 +25,6 @@ namespace BbQ.MockLite.Generators.Tests.GenericRegression
     [GenerateMock]
     public interface IRepository<T>
     {
-        T? Find(string key);
+        T Find(string key);
     }
 }
