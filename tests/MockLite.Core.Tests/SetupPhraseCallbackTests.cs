@@ -185,11 +185,7 @@ public class SetupPhraseCallbackTests
 
         Assert.Equal("A", mock.Object.GetValue("a"));
         Assert.Equal("B", mock.Object.GetValue("b"));
-        // Note: Callback uses OnInvocation which registers a method-level listener
-        // (not arg-filtered). Both callbacks fire on every GetValue call regardless
-        // of the argument value, consistent with the existing OnCall behavior.
-        Assert.Equal(4, log.Count);
-        Assert.Contains("callback-a", log);
-        Assert.Contains("callback-b", log);
+        // v2: callbacks attached to a setup inherit that setup's argument matcher.
+        Assert.Equal(["callback-a", "callback-b"], log);
     }
 }

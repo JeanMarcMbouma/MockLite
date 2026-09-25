@@ -1,3 +1,7 @@
+# MockLite 2.x semantics note
+
+For 2.x, ordinary `Verify(expression, times)` is argument-aware, setup callbacks inherit their setup matcher, and newest matching setup wins consistently. Use `VerifyAnyArguments` for intentional method-wide counts. See `MIGRATION_2.0.md`.
+
 # Feature Summary
 
 High-level overview of all BbQ.MockLite features.
@@ -84,8 +88,8 @@ Returned by `SetupSet(property)`, the `SetSetupPhrase<TProp>` struct supports:
 
 | API | Description |
 |---|---|
-| `Verify(expr, times, message?)` | Verify a return-value method call count. The expression arguments do not filter calls. |
-| `Verify(voidExpr, times, message?)` | Verify a void method call count. The expression arguments do not filter calls. |
+| `Verify(expr, times, message?)` | Verify a return-value method call count. In 2.x, expression arguments filter calls using exact values and It matchers. |
+| `Verify(voidExpr, times, message?)` | Verify a void method call count. In 2.x, expression arguments filter calls using exact values and It matchers. |
 | `Verify(expr, matcher, times, message?)` | Verify a return-value method with `object?[]` argument matching. |
 | `VerifyGet(prop, times, message?)` | Verify property getter access count. |
 | `VerifySet(prop, times, message?)` | Verify property setter call count. |

@@ -70,7 +70,7 @@ public class MockInvocationBenchmarks
     [IterationSetup]
     public void ResetInvocationHistory()
     {
-        _generatedMock.Invocations.Clear();
+        _generatedMock.Reset();
         _runtimeBuilder.Reset();
     }
 

@@ -12,10 +12,8 @@ public class MockLiteAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         [
-            DiagnosticDescriptors.UnusedSetup,
             DiagnosticDescriptors.AsyncReturnsMismatch,
             DiagnosticDescriptors.NonVirtualClassMethod,
-            DiagnosticDescriptors.VerifyNonMockedMethod,
             DiagnosticDescriptors.AmbiguousOverload,
         ];
 

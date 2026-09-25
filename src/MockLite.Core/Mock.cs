@@ -321,7 +321,7 @@ public sealed class Mock<T> where T : class
         /// </example>
         public SetupPhrase<TResult> Callback(Action callback)
         {
-            _mock._proxy.OnInvocation(_method, _ => callback());
+            _mock._proxy.OnInvocation(_method, BuildArgMatcher(_args), _ => callback());
             return this;
         }
 
@@ -339,7 +339,7 @@ public sealed class Mock<T> where T : class
         /// </example>
         public SetupPhrase<TResult> Callback(Action<object?[]> callback)
         {
-            _mock._proxy.OnInvocation(_method, callback);
+            _mock._proxy.OnInvocation(_method, BuildArgMatcher(_args), callback);
             return this;
         }
 
@@ -350,7 +350,7 @@ public sealed class Mock<T> where T : class
         public SetupPhrase<TResult> Callback<T1>(Action<T1> callback)
         {
             ValidateAndSetupOnCall(_method, [typeof(T1)], nameof(callback));
-            _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!));
+            _mock._proxy.OnInvocation(_method, BuildArgMatcher(_args), args => callback((T1)args[0]!));
             return this;
         }
 
@@ -361,7 +361,7 @@ public sealed class Mock<T> where T : class
         public SetupPhrase<TResult> Callback<T1, T2>(Action<T1, T2> callback)
         {
             ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2)], nameof(callback));
-            _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!, (T2)args[1]!));
+            _mock._proxy.OnInvocation(_method, BuildArgMatcher(_args), args => callback((T1)args[0]!, (T2)args[1]!));
             return this;
         }
 
@@ -372,7 +372,7 @@ public sealed class Mock<T> where T : class
         public SetupPhrase<TResult> Callback<T1, T2, T3>(Action<T1, T2, T3> callback)
         {
             ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2), typeof(T3)], nameof(callback));
-            _mock._proxy.OnInvocation(_method, args => callback((T1)args[0]!, (T2)args[1]!, (T3)args[2]!));
+            _mock._proxy.OnInvocation(_method, BuildArgMatcher(_args), args => callback((T1)args[0]!, (T2)args[1]!, (T3)args[2]!));
             return this;
         }
     }
@@ -663,7 +663,7 @@ public sealed class Mock<T> where T : class
     /// <remarks>
     /// This method checks that the specified method was invoked exactly as many times
     /// as the <paramref name="times"/> predicate requires. The method is identified by
-    /// the expression, and all invocations with any arguments are counted.
+    /// the expression, including exact values and It matchers.
     /// </remarks>
     /// <example>
     /// <code>
@@ -672,12 +672,14 @@ public sealed class Mock<T> where T : class
     /// </example>
     public void Verify(Expression<Func<T, object?>> expression, Func<int, bool> times, string? message = null)
     {
-        var (method, _) = ExtractMethod(expression);
+        var (method, args) = ExtractMethod(expression);
+        var argumentMatcher = BuildArgMatcher(args);
         int count = 0;
         var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
-            if (GenericMethodMatches(invocations[i].Method, method))
+            if (GenericMethodMatches(invocations[i].Method, method) &&
+                (argumentMatcher is null || argumentMatcher(invocations[i].Arguments)))
                 count++;
         }
         if (!times(count))
@@ -722,6 +724,36 @@ public sealed class Mock<T> where T : class
         if (!times(count))
         {
             var line = $"Verification failed for {method.Name} with matcher. Actual calls: {count}";
+            throw new VerificationException(FormatVerificationMessage(line, message));
+        }
+    }
+
+    /// <summary>
+    /// Verifies a return-value method call count regardless of invocation arguments.
+    /// Use this when method-wide counting is intentional.
+    /// </summary>
+    public void VerifyAnyArguments(Expression<Func<T, object?>> expression, Func<int, bool> times, string? message = null)
+    {
+        var (method, _) = ExtractMethod(expression);
+        VerifyAnyArgumentsCore(method, times, message);
+    }
+
+    /// <summary>
+    /// Verifies a void method call count regardless of invocation arguments.
+    /// Use this when method-wide counting is intentional.
+    /// </summary>
+    public void VerifyAnyArguments(Expression<Action<T>> expression, Func<int, bool> times, string? message = null)
+    {
+        var (method, _) = ExtractMethod(expression);
+        VerifyAnyArgumentsCore(method, times, message);
+    }
+
+    private void VerifyAnyArgumentsCore(MethodInfo method, Func<int, bool> times, string? message)
+    {
+        var count = _proxy.GetInvocationsSnapshot().Count(i => GenericMethodMatches(i.Method, method));
+        if (!times(count))
+        {
+            var line = $"Verification failed for {method.Name} with any arguments. Actual calls: {count}";
             throw new VerificationException(FormatVerificationMessage(line, message));
         }
     }
@@ -1802,7 +1834,7 @@ public sealed class Mock<T> where T : class
     /// <exception cref="VerificationException">Thrown if the verification predicate returns false.</exception>
     /// <remarks>
     /// This overload allows direct verification of void methods without boxing.
-    /// All invocations of the specified method are counted regardless of arguments.
+    /// Only invocations whose arguments match the expression are counted. Use VerifyAnyArguments for method-wide counting.
     /// </remarks>
     /// <example>
     /// <code>
@@ -1813,12 +1845,14 @@ public sealed class Mock<T> where T : class
     /// </example>
     public void Verify(Expression<Action<T>> expression, Func<int, bool> times, string? message = null)
     {
-        var (method, _) = ExtractMethod(expression);
+        var (method, args) = ExtractMethod(expression);
+        var argumentMatcher = BuildArgMatcher(args);
         int count = 0;
         var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
-            if (GenericMethodMatches(invocations[i].Method, method))
+            if (GenericMethodMatches(invocations[i].Method, method) &&
+                (argumentMatcher is null || argumentMatcher(invocations[i].Arguments)))
                 count++;
         }
         if (!times(count))

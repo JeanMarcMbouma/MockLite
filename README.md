@@ -2,6 +2,9 @@
 
 A lightweight, high-performance mocking framework for .NET that combines compile-time code generation with runtime flexibility. BbQ.MockLite enables you to create optimized mock implementations at build time while providing fallback runtime proxies for dynamic scenarios.
 
+
+> **2.x interaction model:** `Verify(expression, times)` now honors expression arguments and `It` matchers; callbacks chained from `Setup(expression)` use the same matcher; and the newest matching setup wins in both runtime and generated mocks. Use `VerifyAnyArguments` when you intentionally want a method-wide count.
+
 ## Features
 
 - ✨ **Compile-Time Code Generation** - Automatically generates optimized mock classes using source generators
@@ -92,8 +95,8 @@ var user = mock.GetUser("123");
 var isActive = mock.IsActive;
 mock.SaveUser(new User { Id = "123", Name = "John Doe" });
 
-// Verify method invocations. The expression selects the method;
-// use the matcher overload when arguments matter.
+// Verify method invocations. In 2.x the expression matches both the method
+// and its argument values / It matchers.
 builder.Verify(x => x.GetUser(It.IsAny<string>()), Times.Once);
 builder.Verify(
     x => x.GetUser(It.IsAny<string>()),
@@ -612,11 +615,12 @@ builder.Setup(
     (string id) => new User { Id = id, IsAdmin = true });
 
 // Use matchers in verification
-// Runtime Verify needs its explicit object[] matcher when arguments matter.
 builder.Verify(
-    x => x.GetUser(It.IsAny<string>()),
-    args => args[0] is string id && id.Length > 5,
+    x => x.GetUser(It.Matches<string>(id => id.Length > 5)),
     Times.Once);
+
+// Explicitly ignore arguments when that is the intended assertion:
+builder.VerifyAnyArguments(x => x.GetUser(It.IsAny<string>()), Times.AtLeast(1));
 ```
 
 `It.IsAny<T>()` and `It.Matches<T>()` are interpreted inside runtime `Setup` expressions. Source-generated `Verify{Method}` overloads instead take one typed predicate per method parameter, for example `mock.VerifyGetUser(id => id.Length > 5, Times.Once)`.
@@ -818,6 +822,8 @@ See the [BbQ.MockLite.Sample](./src/MockLite.Sample/Program.cs) project for comp
 
 For detailed documentation on callbacks and advanced features, see:
 
+- [MockLite 2.0 Migration Guide](./MIGRATION_2.0.md) - Breaking interaction changes and upgrade checklist
+- [Analyzer Status](./ANALYZERS.md) - Implemented and reserved diagnostic IDs
 - [Public API Reference](./PUBLIC_API.md) - Runtime and generated API signatures and behavior
 - [Callback Feature Guide](./CALLBACK_FEATURE_GUIDE.md) - Complete API reference
 - [Callback Quick Reference](./CALLBACK_QUICK_REFERENCE.md) - Quick start and examples

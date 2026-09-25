@@ -8,68 +8,78 @@ using System.Text;
 namespace BbQ.MockLite.Generators;
 
 [Generator]
-public class InterfaceMockGenerator : ISourceGenerator
+public sealed class InterfaceMockGenerator : ISourceGenerator
 {
-    public void Initialize(GeneratorInitializationContext context) { }
+    public void Initialize(GeneratorInitializationContext context)
+    {
+        context.RegisterForSyntaxNotifications(static () => new TargetSyntaxReceiver());
+    }
 
     public void Execute(GeneratorExecutionContext context)
     {
+        if (context.SyntaxReceiver is not TargetSyntaxReceiver receiver) return;
+
         var compilation = context.Compilation;
-        var targets = DiscoverTargets(compilation);
+        var targets = DiscoverTargets(compilation, receiver);
 
         foreach (var iface in targets)
         {
             var source = GenerateMockSource(compilation, iface);
-            var className = GetMockClassName(iface.Name);
             var hintName = SanitizeIdentifier(iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) + ".g.cs";
             context.AddSource(hintName, source);
         }
     }
 
-    private static IEnumerable<INamedTypeSymbol> DiscoverTargets(Compilation compilation)
+    private static IEnumerable<INamedTypeSymbol> DiscoverTargets(Compilation compilation, TargetSyntaxReceiver receiver)
     {
         var results = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
-        foreach (var tree in compilation.SyntaxTrees)
+        foreach (var declaration in receiver.Candidates)
         {
-            var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
-            var root = tree.GetRoot();
+            var model = compilation.GetSemanticModel(declaration.SyntaxTree, ignoreAccessibility: true);
 
-            foreach (var ifaceDecl in root.DescendantNodes().OfType<InterfaceDeclarationSyntax>())
+            if (declaration is InterfaceDeclarationSyntax ifaceDecl)
             {
-                var symbol = model.GetDeclaredSymbol(ifaceDecl) as INamedTypeSymbol;
-                if (symbol is null) continue;
-
-                if (symbol.GetAttributes().Any(a => a.AttributeClass?.Name == nameof(GenerateMockAttribute)))
+                if (model.GetDeclaredSymbol(ifaceDecl) is INamedTypeSymbol symbol &&
+                    symbol.GetAttributes().Any(a => a.AttributeClass?.Name == nameof(GenerateMockAttribute)))
                     results.Add(symbol);
+                continue;
             }
 
-            foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            if (declaration is not ClassDeclarationSyntax classDecl ||
+                model.GetDeclaredSymbol(classDecl) is not INamedTypeSymbol classSymbol)
+                continue;
+
+            foreach (var attr in classSymbol.GetAttributes())
             {
-                var classSymbol = model.GetDeclaredSymbol(classDecl) as INamedTypeSymbol;
-                if (classSymbol is null) continue;
+                var name = attr.AttributeClass?.Name;
+                if (name is null) continue;
 
-                foreach (var attr in classSymbol.GetAttributes())
+                if (name == nameof(GenerateMockAttribute) && attr.ConstructorArguments.Length == 1)
                 {
-                    var name = attr.AttributeClass?.Name;
-                    if (name is null) continue;
-
-                    if (name == nameof(GenerateMockAttribute) && attr.ConstructorArguments.Length == 1)
-                    {
-                        if (attr.ConstructorArguments[0].Value is INamedTypeSymbol t && t.TypeKind == TypeKind.Interface)
-                            results.Add(t);
-                    }
-                    else if (name.StartsWith(nameof(GenerateMockAttribute)) && attr.AttributeClass?.TypeArguments.Length == 1)
-                    {
-                        var t = attr.AttributeClass.TypeArguments[0] as INamedTypeSymbol;
-                        if (t is { TypeKind: TypeKind.Interface })
-                            results.Add(t);
-                    }
+                    if (attr.ConstructorArguments[0].Value is INamedTypeSymbol t && t.TypeKind == TypeKind.Interface)
+                        results.Add(t);
+                }
+                else if (name.StartsWith(nameof(GenerateMockAttribute)) && attr.AttributeClass?.TypeArguments.Length == 1)
+                {
+                    if (attr.AttributeClass.TypeArguments[0] is INamedTypeSymbol t && t.TypeKind == TypeKind.Interface)
+                        results.Add(t);
                 }
             }
         }
 
         return results;
+    }
+
+    private sealed class TargetSyntaxReceiver : ISyntaxReceiver
+    {
+        public List<TypeDeclarationSyntax> Candidates { get; } = new();
+
+        public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
+        {
+            if (syntaxNode is TypeDeclarationSyntax { AttributeLists.Count: > 0 } declaration)
+                Candidates.Add(declaration);
+        }
     }
 
     private static string GetMockClassName(string ifaceName)
@@ -183,7 +193,9 @@ public class InterfaceMockGenerator : ISourceGenerator
         var classConstraints = BuildTypeParameterConstraints(iface.TypeParameters);
         sb.AppendLine($"public sealed class {classTypeName} : {ifaceDisplay}{classConstraints}");
         sb.AppendLine("{");
-        sb.AppendLine("    public List<Invocation> Invocations { get; } = new();");
+        sb.AppendLine("    private readonly System.Collections.Concurrent.ConcurrentQueue<Invocation> _invocations = new();");
+        sb.AppendLine("    public IReadOnlyList<Invocation> Invocations => _invocations.ToArray();");
+        sb.AppendLine("    public void Reset() { while (_invocations.TryDequeue(out _)) { } }");
 
         // Collect all methods and properties from the interface hierarchy (composite interface support).
         var methods = GetAllMethods(iface);
@@ -197,7 +209,8 @@ public class InterfaceMockGenerator : ISourceGenerator
             var field = BehaviorFieldName(m);
             var delType = BehaviorDelegateType(m);
             sb.AppendLine($"    public {delType}? {field} {{ get; set; }}");
-            sb.AppendLine($"    public Action? {MethodCallbackFieldName(m)} {{ get; set; }}");
+            sb.AppendLine($"    private readonly System.Collections.Concurrent.ConcurrentQueue<(Func<object?[], bool>? Matcher, {delType} Behavior)> {field}_Setups = new();");
+            sb.AppendLine($"    private readonly System.Collections.Concurrent.ConcurrentQueue<(Func<object?[], bool>? Matcher, Action Callback)> {MethodCallbackFieldName(m)}_Callbacks = new();");
         }
 
         // Static cached MethodInfo fields for methods (avoids per-call GetMethod reflection).
@@ -449,7 +462,7 @@ public class InterfaceMockGenerator : ISourceGenerator
 
         sb.AppendLine($"    public {ret} {name}{typeParamClause}({parmsSig}){constraintsClauses}");
         sb.AppendLine("    {");
-        sb.AppendLine($"        Invocations.Add(new Invocation({miField}, new object[] {{ {invocationArgs} }}));");
+        sb.AppendLine($"        _invocations.Enqueue(new Invocation({miField}, new object[] {{ {invocationArgs} }}));");
 
         // Generic methods have no class-level behavior field; just return smart defaults.
         if (m.IsGenericMethod)
@@ -489,13 +502,18 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             var field = BehaviorFieldName(m);
             var cbField = MethodCallbackFieldName(m);
-            sb.AppendLine($"        {cbField}?.Invoke();");
+            sb.AppendLine($"        var __args = new object?[] {{ {invocationArgs} }};");
+            sb.AppendLine($"        foreach (var (__matcher, __callback) in {cbField}_Callbacks) if (__matcher is null || __matcher(__args)) __callback();");
+            sb.AppendLine($"        var __setups = {field}_Setups.ToArray();");
+            sb.AppendLine($"        for (var __i = __setups.Length - 1; __i >= 0; __i--) {{ var (__matcher, __behavior) = __setups[__i]; if (__matcher is null || __matcher(__args)) {{");
             if (ret == "void")
             {
+                sb.AppendLine($"            __behavior({behaviorArgs}); return; }} }}");
                 sb.AppendLine($"        {field}?.Invoke({behaviorArgs});");
             }
             else if (ret == "Task")
             {
+                sb.AppendLine($"            return __behavior({behaviorArgs}); }} }}");
                 sb.AppendLine($"        return {field}?.Invoke({behaviorArgs}) ?? Task.CompletedTask;");
             }
             else if (ret.StartsWith("Task<"))
@@ -503,23 +521,27 @@ public class InterfaceMockGenerator : ISourceGenerator
                 var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
                 var innerDisplay = TypeDisplay(innerType);
                 var smartDef = SmartDefault(innerType);
+                sb.AppendLine($"            return __behavior({behaviorArgs}); }} }}");
                 sb.AppendLine($"        if ({field} != null) return {field}({behaviorArgs});");
                 sb.AppendLine($"        return Task.FromResult<{innerDisplay}>({smartDef});");
             }
             else if (ret == "ValueTask")
             {
+                sb.AppendLine($"            return __behavior({behaviorArgs}); }} }}");
                 sb.AppendLine($"        return {field}?.Invoke({behaviorArgs}) ?? default;");
             }
             else if (ret.StartsWith("ValueTask<"))
             {
                 var innerType = ((INamedTypeSymbol)m.ReturnType).TypeArguments[0];
                 var smartDef = SmartDefault(innerType);
+                sb.AppendLine($"            return __behavior({behaviorArgs}); }} }}");
                 sb.AppendLine($"        if ({field} != null) return {field}({behaviorArgs});");
                 sb.AppendLine($"        return new ValueTask<{TypeDisplay(innerType)}>({smartDef});");
             }
             else
             {
                 var smartDef = SmartDefault(m.ReturnType);
+                sb.AppendLine($"            return __behavior({behaviorArgs}); }} }}");
                 sb.AppendLine($"        if ({field} != null) return {field}({behaviorArgs});");
                 sb.AppendLine($"        return {smartDef};");
             }
@@ -534,65 +556,20 @@ public class InterfaceMockGenerator : ISourceGenerator
         var field = BehaviorFieldName(m);
         var behaviorType = BehaviorDelegateType(m);
         var apiName = MethodApiName(m);
-        return $"    public {className} Setup{apiName}({behaviorType} behavior) {{ {field} = behavior; return this; }}\n";
+        return $"    public {className} Setup{apiName}({behaviorType} behavior) {{ {field}_Setups.Enqueue((null, behavior)); return this; }}\n";
     }
 
     private static string EmitMethodSetupWithMatcher(IMethodSymbol m, string className)
     {
         var field = BehaviorFieldName(m);
-        var ret = TypeDisplay(m.ReturnType);
-        var args = string.Join(", ", m.Parameters.Select(p => p.Name));
         var matcherSig = string.Join(", ", m.Parameters.Select(p => $"Func<{TypeDisplay(p.Type)}, bool> {p.Name}Matcher"));
-        var conj = m.Parameters.Length == 0 ? "true" : string.Join(" && ", m.Parameters.Select(p => $"{p.Name}Matcher({p.Name})"));
-
-        var sb = new StringBuilder();
+        var matcherBody = string.Join(" && ", m.Parameters.Select((p, idx) => $"{p.Name}Matcher(({TypeDisplay(p.Type)})__args[{idx}]!)"));
         var apiName = MethodApiName(m);
-        sb.AppendLine($"    public {className} Setup{apiName}({matcherSig}{(matcherSig.Length > 0 ? ", " : "")} {BehaviorDelegateType(m)} behavior)");
+        var sb = new StringBuilder();
+        sb.AppendLine($"    public {className} Setup{apiName}({matcherSig}, {BehaviorDelegateType(m)} behavior)");
         sb.AppendLine("    {");
-        if (ret == "void")
-        {
-            sb.AppendLine($"        {field} = ({args}) => {{ if ({conj}) behavior({args}); }};");
-        }
-        else if (ret == "Task" || ret.StartsWith("Task<") || ret == "ValueTask" || ret.StartsWith("ValueTask<"))
-        {
-            // For async methods, the behavior already returns the correct async type
-            sb.AppendLine($"        {field} = ({args}) => ({conj}) ? behavior({args}) : GetDefault{MethodApiName(m)}();");
-            sb.AppendLine("        return this;");
-            sb.AppendLine("    }");
-            sb.AppendLine();
-            // Add helper to generate default async result using smart defaults
-            string def;
-            if (ret == "Task")
-            {
-                def = "Task.CompletedTask";
-            }
-            else if (ret.StartsWith("Task<") && m.ReturnType is INamedTypeSymbol taskNamed)
-            {
-                var innerDefault = SmartDefault(taskNamed.TypeArguments[0]);
-                def = $"Task.FromResult<{TypeDisplay(taskNamed.TypeArguments[0])}>({innerDefault})";
-            }
-            else if (ret == "ValueTask")
-            {
-                def = "default";
-            }
-            else if (ret.StartsWith("ValueTask<") && m.ReturnType is INamedTypeSymbol vtNamed)
-            {
-                var innerDefault = SmartDefault(vtNamed.TypeArguments[0]);
-                def = $"new ValueTask<{TypeDisplay(vtNamed.TypeArguments[0])}>({innerDefault})";
-            }
-            else
-            {
-                def = SmartDefault(m.ReturnType);
-            }
-            sb.AppendLine($"    private static {ret} GetDefault{MethodApiName(m)}() => {def};");
-            return sb.ToString();
-        }
-        else
-        {
-            var def = SmartDefault(m.ReturnType);
-            sb.AppendLine($"        {field} = ({args}) => ({conj}) ? behavior({args}) : {def};");
-        }
-        sb.AppendLine($"        return this;");
+        sb.AppendLine($"        {field}_Setups.Enqueue((__args => {matcherBody}, behavior));");
+        sb.AppendLine("        return this;");
         sb.AppendLine("    }");
         return sb.ToString();
     }
@@ -689,7 +666,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         }
 
         // Callback (chainable, returns phrase)
-        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField} = callback; return this; }}");
+        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField}_Callbacks.Enqueue((null, callback)); return this; }}");
 
         sb.AppendLine("    }");
         sb.AppendLine($"    public {structName} Setup{apiName}() => new {structName}(this);");
@@ -739,7 +716,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.AppendLine("        get");
             sb.AppendLine("        {");
-            sb.AppendLine($"            Invocations.Add(new Invocation({PropertyGetMethodInfoFieldName(p)}, Array.Empty<object>()));");
+            sb.AppendLine($"            _invocations.Enqueue(new Invocation({PropertyGetMethodInfoFieldName(p)}, Array.Empty<object>()));");
             sb.AppendLine($"            {GetCallbackFieldName(p)}?.Invoke();");
             sb.AppendLine($"            if ({GetBehaviorFieldName(p)} is not null) return {GetBehaviorFieldName(p)}();");
             sb.AppendLine($"            return _{name}!;");
@@ -749,7 +726,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.AppendLine("        set");
             sb.AppendLine("        {");
-            sb.AppendLine($"            Invocations.Add(new Invocation({PropertySetMethodInfoFieldName(p)}, new object[] {{ value }}));");
+            sb.AppendLine($"            _invocations.Enqueue(new Invocation({PropertySetMethodInfoFieldName(p)}, new object[] {{ value }}));");
             sb.AppendLine($"            if ({SetBehaviorFieldName(p)} is not null) {{ {SetBehaviorFieldName(p)}(value); }} else _{name} = value;");
             sb.AppendLine("        }");
         }

@@ -20,6 +20,7 @@ public interface IUserService
 {
     string Name { get; set; }
     int GetCount(string category);
+    string Lookup(string key);
     Task<User> GetUserAsync(int id);
 }
 
