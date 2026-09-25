@@ -422,7 +422,7 @@ public class GeneratedMethodSetupPhraseTests
         var mock = new MockBoolSetupService();
 
         mock.SetupIsEnabled(feature => feature == "fallback");
-        mock.SetupIsEnabled((Predicate<string>)(feature => feature.StartsWith("beta")))
+        mock.SetupIsEnabledMatching(feature => feature.StartsWith("beta"))
             .Returns(feature => true);
 
         Assert.True(mock.IsEnabled("beta-search"));
