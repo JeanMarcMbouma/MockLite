@@ -28,6 +28,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     private readonly List<Invocation> _invocations = [];
     private readonly object _invocationLock = new();
 
+    // Kept for internal compatibility and diagnostics; Mock<T>.Invocations exposes a stable snapshot.
+    public List<Invocation> Invocations => _invocations;
+
     internal IReadOnlyList<Invocation> GetInvocationsSnapshot()
     {
         lock (_invocationLock)
