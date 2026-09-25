@@ -7,6 +7,7 @@ namespace BbQ.MockLite.Generators.Tests;
 [GenerateMock<ICollectionReturningService>]
 [GenerateMock<IGenericMethodService>]
 [GenerateMock<ITaskService>]
+[GenerateMock<IBoolSetupService>]
 public partial class Mocks { }
 
 [GenerateMock]
@@ -65,4 +66,11 @@ public interface ITaskService
     Task DoWorkWithArgAsync(string input);
     ValueTask ProcessAsync();
     ValueTask ProcessWithArgAsync(int count);
+}
+
+// --- Bool-returning single-parameter interface: behavior and matcher setup overloads
+// intentionally share SetupIsEnabled while remaining unambiguous (Func vs Predicate). ---
+public interface IBoolSetupService
+{
+    bool IsEnabled(string feature);
 }
