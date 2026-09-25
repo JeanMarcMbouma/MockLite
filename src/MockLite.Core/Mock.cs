@@ -958,13 +958,9 @@ public sealed class Mock<T> where T : class
     }
 
     /// <summary>
-    /// Evaluates a single argument expression, substituting <c>It.IsAny&lt;T&gt;()</c> calls
-    /// with <see cref="It.AnyMatcher.Instance"/> (a stable reference-type sentinel) rather
-    /// than evaluating the expression to its runtime value. This avoids the GC-sensitive
-    /// value comparison for value-type parameters: <c>Unsafe.As&lt;AnyMatcher, T&gt;</c>
-    /// returns bytes derived from the GC-managed pointer of <see cref="It.AnyMatcher.Instance"/>,
-    /// which changes on heap compaction, causing stale cached sentinels to produce false negatives
-    /// under concurrent test runs.
+    /// Evaluates a single argument expression, recognizing MockLite matcher calls
+    /// directly from the expression tree. Wildcards are represented internally by
+    /// <see cref="It.AnyMatcher.Instance"/> and never exposed as arbitrary user values.
     /// </summary>
     private static object? ExtractArgument(Expression arg)
     {
