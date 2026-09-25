@@ -53,6 +53,20 @@ public class V2SemanticsTests
     }
 
     [Fact]
+    public void ConcurrentSetupRegistration_AndInvocation_DoesNotCorruptState()
+    {
+        var mock = Mock.Create<IService>();
+
+        Parallel.For(0, 100, i =>
+            mock.Setup(x => x.Get(i.ToString()), () => i.ToString()));
+
+        Parallel.For(0, 100, i =>
+            Assert.Equal(i.ToString(), mock.Object.Get(i.ToString())));
+
+        Assert.Equal(100, mock.Invocations.Count);
+    }
+
+    [Fact]
     public void SetupPhraseCallback_UsesSetupArgumentMatcher()
     {
         var calls = new List<string>();
