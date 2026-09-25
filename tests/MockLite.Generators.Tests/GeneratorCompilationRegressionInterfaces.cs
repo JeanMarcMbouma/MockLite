@@ -28,3 +28,18 @@ namespace BbQ.MockLite.Generators.Tests.GenericRegression
         T Find(string key);
     }
 }
+
+
+namespace BbQ.MockLite.Generators.Tests.ExternalContracts
+{
+    public sealed record ExternalDto(string Value);
+}
+
+namespace BbQ.MockLite.Generators.Tests.ExternalConsumer
+{
+    [GenerateMock]
+    public interface IExternalService
+    {
+        ExternalContracts.ExternalDto Load(ExternalContracts.ExternalDto value);
+    }
+}
