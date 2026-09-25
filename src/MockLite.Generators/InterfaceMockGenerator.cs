@@ -461,7 +461,8 @@ public class InterfaceMockGenerator : ISourceGenerator
             else
             {
                 var smartDef = SmartDefault(m.ReturnType);
-                sb.AppendLine($"        return {field}?.Invoke({behaviorArgs}) ?? {smartDef};");
+                sb.AppendLine($"        if ({field} != null) return {field}({behaviorArgs});");
+                sb.AppendLine($"        return {smartDef};");
             }
         }
 
