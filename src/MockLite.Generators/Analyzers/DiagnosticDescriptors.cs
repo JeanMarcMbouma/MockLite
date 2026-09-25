@@ -8,7 +8,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnusedSetup =
         new("ML001", "Unused Setup",
             "Setup defined but method never invoked in test code",
-            "Usage", DiagnosticSeverity.Warning, isEnabledByDefault: false);
+            "Usage", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor AsyncReturnsMismatch =
         new("ML002", "Async Returns Mismatch",
@@ -23,7 +23,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor VerifyNonMockedMethod =
         new("ML004", "Verify Non-Mocked Method",
             "Verify called on a method that was never mocked",
-            "Usage", DiagnosticSeverity.Warning, isEnabledByDefault: false);
+            "Usage", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor AmbiguousOverload =
         new("ML005", "Ambiguous Overload",
