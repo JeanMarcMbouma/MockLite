@@ -8,7 +8,7 @@ using System.Text;
 namespace BbQ.MockLite.Generators;
 
 [Generator]
-public class InterfaceMockGenerator : ISourceGenerator
+public sealed class InterfaceMockGenerator : ISourceGenerator
 {
     public void Initialize(GeneratorInitializationContext context)
     {
