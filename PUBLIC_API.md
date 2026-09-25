@@ -196,10 +196,23 @@ For each non-generic interface method named `Method`, a generated mock exposes t
 | `MethodReturns(value)` | Configure a constant sync, `Task<T>`, or `ValueTask<T>` result |
 | `MethodReturns()` | Configure completed non-generic `Task` or default `ValueTask` |
 | `SetupMethod()` | Return a generated method setup phrase |
+| `SetupMethod(parameterMatcher...)` | Return the same typed phrase, filtered by one typed predicate per parameter |
 | `VerifyMethod(times, message?)` | Verify the method call count |
 | `VerifyMethod(parameterMatcher..., times, message?)` | Verify calls accepted by all typed parameter predicates |
 
-Generated method phrases provide `Returns`, `Throws`, and a chainable parameterless `Callback`. Their factory overload takes the method's full typed parameter list. Generic interface methods are implemented and can be verified, but do not receive generated setup/returns helpers.
+Generated method phrases preserve the selected method's complete signature. Their factory `Returns` overload takes the method's full typed parameter list, and methods with parameters expose both `Callback(Action)` and an exact typed `Callback(Action<T1, ...>)`. Matcher-selecting `SetupMethod(parameterMatcher...)` overloads return the same phrase, so the matcher is inherited by both callbacks and terminal behaviors. Constant returns, factory returns, throws, direct `SetupMethod(behavior)`, and shorthand `MethodReturns(...)` all participate in the same ordered setup registration; the most recently registered matching setup wins. Generic interface methods are implemented and can be verified, but do not receive generated setup/returns helpers.
+
+For example:
+
+```csharp
+mock.SetupFormat(
+        text => text.StartsWith("item"),
+        count => count > 0)
+    .Callback((text, count) => log.Add($"{text}:{count}"))
+    .Returns((text, count) => $"{text.ToUpperInvariant()}:{count}");
+```
+
+Here IntelliSense contextually types `text` as `string` and `count` as `int` in both delegates; incompatible lambda parameter counts or types are rejected by the C# compiler.
 
 For a property named `Name`, applicable generated members are:
 
