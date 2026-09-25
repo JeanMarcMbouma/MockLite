@@ -183,7 +183,9 @@ public class InterfaceMockGenerator : ISourceGenerator
         var classConstraints = BuildTypeParameterConstraints(iface.TypeParameters);
         sb.AppendLine($"public sealed class {classTypeName} : {ifaceDisplay}{classConstraints}");
         sb.AppendLine("{");
-        sb.AppendLine("    public List<Invocation> Invocations { get; } = new();");
+        sb.AppendLine("    private readonly System.Collections.Concurrent.ConcurrentQueue<Invocation> _invocations = new();");
+        sb.AppendLine("    public IReadOnlyList<Invocation> Invocations => _invocations.ToArray();");
+        sb.AppendLine("    public void Reset() { while (_invocations.TryDequeue(out _)) { } }");
 
         // Collect all methods and properties from the interface hierarchy (composite interface support).
         var methods = GetAllMethods(iface);
@@ -450,7 +452,7 @@ public class InterfaceMockGenerator : ISourceGenerator
 
         sb.AppendLine($"    public {ret} {name}{typeParamClause}({parmsSig}){constraintsClauses}");
         sb.AppendLine("    {");
-        sb.AppendLine($"        Invocations.Add(new Invocation({miField}, new object[] {{ {invocationArgs} }}));");
+        sb.AppendLine($"        _invocations.Enqueue(new Invocation({miField}, new object[] {{ {invocationArgs} }}));");
 
         // Generic methods have no class-level behavior field; just return smart defaults.
         if (m.IsGenericMethod)
@@ -703,7 +705,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.AppendLine("        get");
             sb.AppendLine("        {");
-            sb.AppendLine($"            Invocations.Add(new Invocation({PropertyGetMethodInfoFieldName(p)}, Array.Empty<object>()));");
+            sb.AppendLine($"            _invocations.Enqueue(new Invocation({PropertyGetMethodInfoFieldName(p)}, Array.Empty<object>()));");
             sb.AppendLine($"            {GetCallbackFieldName(p)}?.Invoke();");
             sb.AppendLine($"            if ({GetBehaviorFieldName(p)} is not null) return {GetBehaviorFieldName(p)}();");
             sb.AppendLine($"            return _{name}!;");
@@ -713,7 +715,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         {
             sb.AppendLine("        set");
             sb.AppendLine("        {");
-            sb.AppendLine($"            Invocations.Add(new Invocation({PropertySetMethodInfoFieldName(p)}, new object[] {{ value }}));");
+            sb.AppendLine($"            _invocations.Enqueue(new Invocation({PropertySetMethodInfoFieldName(p)}, new object[] {{ value }}));");
             sb.AppendLine($"            if ({SetBehaviorFieldName(p)} is not null) {{ {SetBehaviorFieldName(p)}(value); }} else _{name} = value;");
             sb.AppendLine("        }");
         }
