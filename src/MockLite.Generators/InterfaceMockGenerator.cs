@@ -471,7 +471,8 @@ public class InterfaceMockGenerator : ISourceGenerator
     {
         var field = BehaviorFieldName(m);
         var behaviorType = BehaviorDelegateType(m);
-        var apiName = MethodApiName(m);\n        return $"    public {className} Setup{apiName}({behaviorType} behavior) {{ {field} = behavior; return this; }}\\n";
+        var apiName = MethodApiName(m);
+        return $"    public {className} Setup{apiName}({behaviorType} behavior) {{ {field} = behavior; return this; }}\n";
     }
 
     private static string EmitMethodSetupWithMatcher(IMethodSymbol m, string className)
