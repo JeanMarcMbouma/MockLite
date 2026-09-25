@@ -363,7 +363,7 @@ public class GeneratedMethodSetupPhraseTests
     {
         var mock = new MockUserService();
 
-        mock.SetupGetCountMatching(category => category.StartsWith("special"))
+        mock.SetupGetCount(category => category.StartsWith("special"))
             .Returns(category => category.Length);
 
         Assert.Equal(7, mock.GetCount("special"));
@@ -376,7 +376,7 @@ public class GeneratedMethodSetupPhraseTests
         var calls = new List<string>();
         var mock = new MockUserService();
 
-        mock.SetupGetCountMatching(category => category.StartsWith("special"))
+        mock.SetupGetCount(category => category.StartsWith("special"))
             .Callback(category => calls.Add(category))
             .Returns(category => category.Length);
 
@@ -400,6 +400,19 @@ public class GeneratedMethodSetupPhraseTests
         mock.SetupGetCount(category => category == "specific", category => 4);
         Assert.Equal(4, mock.GetCount("specific"));
         Assert.Equal(3, mock.GetCount("other"));
+    }
+
+
+    [Fact]
+    public void SetupRead_SingleParameterMatcher_PreservesSetupName()
+    {
+        var mock = new MockCompositeService();
+
+        mock.SetupRead(key => key.StartsWith("cfg-"))
+            .Returns(key => $"matched:{key}");
+
+        Assert.Equal("matched:cfg-main", mock.Read("cfg-main"));
+        Assert.Equal(string.Empty, mock.Read("other"));
     }
 
 }
