@@ -674,7 +674,7 @@ public sealed class Mock<T> where T : class
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (GenericMethodMatches(invocations[i].Method, method))
@@ -712,7 +712,7 @@ public sealed class Mock<T> where T : class
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             var inv = invocations[i];
@@ -820,7 +820,7 @@ public sealed class Mock<T> where T : class
     {
         var pi = ExtractProperty(property);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (invocations[i].Method == pi.GetMethod)
@@ -854,7 +854,7 @@ public sealed class Mock<T> where T : class
     {
         var pi = ExtractProperty(property);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (invocations[i].Method == pi.SetMethod)
@@ -889,7 +889,7 @@ public sealed class Mock<T> where T : class
     {
         var pi = ExtractProperty(property);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             var inv = invocations[i];
@@ -923,7 +923,7 @@ public sealed class Mock<T> where T : class
     /// including their method information and arguments. Useful for manual verification,
     /// debugging, and understanding the call sequence on the mock.
     /// </remarks>
-    public IReadOnlyList<Invocation> Invocations => _proxy.Invocations;
+    public IReadOnlyList<Invocation> Invocations => _proxy.GetInvocationsSnapshot();
 
     // --- Helper Methods ---
 
@@ -1789,7 +1789,7 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> Reset()
     {
-        _proxy.Invocations.Clear();
+        _proxy.ClearInvocations();
         return this;
     }
 
@@ -1816,7 +1816,7 @@ public sealed class Mock<T> where T : class
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (GenericMethodMatches(invocations[i].Method, method))
