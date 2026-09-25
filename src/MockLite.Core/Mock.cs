@@ -959,8 +959,7 @@ public sealed class Mock<T> where T : class
 
     /// <summary>
     /// Evaluates a single argument expression, recognizing MockLite matcher calls
-    /// directly from the expression tree. Wildcards are represented internally by
-    /// <see cref="It.AnyMatcher.Instance"/> and never exposed as arbitrary user values.
+    /// directly from the expression tree before ordinary argument evaluation.
     /// </summary>
     private static object? ExtractArgument(Expression arg)
     {
@@ -973,7 +972,7 @@ public sealed class Mock<T> where T : class
         {
             // Detect It.IsAny<T>() directly from the expression tree.
             if (mce.Method.Name == nameof(It.IsAny) && mce.Arguments.Count == 0)
-                return It.AnyMatcher.Instance;
+                return It.IsAny<object>(); // Returns AnyMatcher.Instance - detectable via 'is' check
 
             // Detect It.Matches<T>(predicate) and capture the predicate.
             // Extract the predicate directly from the expression tree, handling
