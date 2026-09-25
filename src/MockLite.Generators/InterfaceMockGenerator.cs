@@ -210,7 +210,7 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
             var delType = BehaviorDelegateType(m);
             sb.AppendLine($"    public {delType}? {field} {{ get; set; }}");
             sb.AppendLine($"    private readonly System.Collections.Concurrent.ConcurrentQueue<(Func<object?[], bool>? Matcher, {delType} Behavior)> {field}_Setups = new();");
-            sb.AppendLine($"    private readonly System.Collections.Concurrent.ConcurrentQueue<(Func<object?[], bool>? Matcher, Action Callback)> {MethodCallbackFieldName(m)}_Callbacks = new();");
+            sb.AppendLine($"    private readonly System.Collections.Concurrent.ConcurrentQueue<(Func<object?[], bool>? Matcher, Action<object?[]> Callback)> {MethodCallbackFieldName(m)}_Callbacks = new();");
         }
 
         // Static cached MethodInfo fields for methods (avoids per-call GetMethod reflection).
@@ -503,7 +503,7 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
             var field = BehaviorFieldName(m);
             var cbField = MethodCallbackFieldName(m);
             sb.AppendLine($"        var __args = new object?[] {{ {invocationArgs} }};");
-            sb.AppendLine($"        foreach (var (__matcher, __callback) in {cbField}_Callbacks) if (__matcher is null || __matcher(__args)) __callback();");
+            sb.AppendLine($"        foreach (var (__matcher, __callback) in {cbField}_Callbacks) if (__matcher is null || __matcher(__args)) __callback(__args);");
             sb.AppendLine($"        var __setups = {field}_Setups.ToArray();");
             sb.AppendLine($"        for (var __i = __setups.Length - 1; __i >= 0; __i--) {{ var (__matcher, __behavior) = __setups[__i]; if (__matcher is null || __matcher(__args)) {{");
             if (ret == "void")
@@ -584,24 +584,24 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
         if (ret.StartsWith("Task<"))
         {
             var tArg = ret.Substring(5, ret.Length - 6);
-            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({tArg} result) {{ {field} = ({args}) => Task.FromResult(result); return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({tArg} result) {{ {field}_Setups.Enqueue((null, ({args}) => Task.FromResult(result))); return this; }}");
         }
         else if (ret == "Task")
         {
-            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns() {{ {field} = ({args}) => Task.CompletedTask; return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns() {{ {field}_Setups.Enqueue((null, ({args}) => Task.CompletedTask)); return this; }}");
         }
         else if (ret.StartsWith("ValueTask<"))
         {
             var tArg = ret.Substring(10, ret.Length - 11);
-            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({tArg} result) {{ {field} = ({args}) => new ValueTask<{tArg}>(result); return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({tArg} result) {{ {field}_Setups.Enqueue((null, ({args}) => new ValueTask<{tArg}>(result))); return this; }}");
         }
         else if (ret == "ValueTask")
         {
-            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns() {{ {field} = ({args}) => default; return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns() {{ {field}_Setups.Enqueue((null, ({args}) => default)); return this; }}");
         }
         else if (ret != "void")
         {
-            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({ret} result) {{ {field} = ({args}) => result; return this; }}");
+            sb.AppendLine($"    public {className} {MethodApiName(m)}Returns({ret} result) {{ {field}_Setups.Enqueue((null, ({args}) => result)); return this; }}");
         }
         return sb.ToString();
     }
@@ -624,52 +624,65 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine($"    public readonly struct {structName}");
         sb.AppendLine("    {");
         sb.AppendLine($"        private readonly {className} _mock;");
-        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
+        sb.AppendLine("        private readonly Func<object?[], bool>? _matcher;");
+        sb.AppendLine($"        internal {structName}({className} mock, Func<object?[], bool>? matcher = null) {{ _mock = mock; _matcher = matcher; }}");
 
         // Returns overloads (non-void only)
         if (ret.StartsWith("Task<"))
         {
             var tArg = ret.Substring(5, ret.Length - 6);
-            sb.AppendLine($"        public {className} Returns({tArg} result) {{ _mock.{field} = ({args}) => Task.FromResult(result); return _mock; }}");
-            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({tArg} result) {{ _mock.{field}_Setups.Enqueue((_matcher, ({args}) => Task.FromResult(result))); return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field}_Setups.Enqueue((_matcher, factory)); return _mock; }}");
         }
         else if (ret == "Task")
         {
-            sb.AppendLine($"        public {className} Returns() {{ _mock.{field} = ({args}) => Task.CompletedTask; return _mock; }}");
-            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns() {{ _mock.{field}_Setups.Enqueue((_matcher, ({args}) => Task.CompletedTask)); return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field}_Setups.Enqueue((_matcher, factory)); return _mock; }}");
         }
         else if (ret.StartsWith("ValueTask<"))
         {
             var tArg = ret.Substring(10, ret.Length - 11);
-            sb.AppendLine($"        public {className} Returns({tArg} result) {{ _mock.{field} = ({args}) => new ValueTask<{tArg}>(result); return _mock; }}");
-            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({tArg} result) {{ _mock.{field}_Setups.Enqueue((_matcher, ({args}) => new ValueTask<{tArg}>(result))); return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field}_Setups.Enqueue((_matcher, factory)); return _mock; }}");
         }
         else if (ret == "ValueTask")
         {
-            sb.AppendLine($"        public {className} Returns() {{ _mock.{field} = ({args}) => default; return _mock; }}");
-            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns() {{ _mock.{field}_Setups.Enqueue((_matcher, ({args}) => default)); return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field}_Setups.Enqueue((_matcher, factory)); return _mock; }}");
         }
         else if (ret != "void")
         {
-            sb.AppendLine($"        public {className} Returns({ret} result) {{ _mock.{field} = ({args}) => result; return _mock; }}");
-            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field} = factory; return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({ret} result) {{ _mock.{field}_Setups.Enqueue((_matcher, ({args}) => result)); return _mock; }}");
+            sb.AppendLine($"        public {className} Returns({behaviorType} factory) {{ _mock.{field}_Setups.Enqueue((_matcher, factory)); return _mock; }}");
         }
 
         // Throws (all methods)
         if (ret == "void")
         {
-            sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{field} = ({args}) => throw ex; return _mock; }}");
+            sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{field}_Setups.Enqueue((_matcher, ({args}) => throw ex)); return _mock; }}");
         }
         else
         {
-            sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{field} = ({args}) => throw ex; return _mock; }}");
+            sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{field}_Setups.Enqueue((_matcher, ({args}) => throw ex)); return _mock; }}");
         }
 
-        // Callback (chainable, returns phrase)
-        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField}_Callbacks.Enqueue((null, callback)); return this; }}");
+        // Callbacks preserve the selected method's argument types in IntelliSense.
+        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField}_Callbacks.Enqueue((_matcher, _ => callback())); return this; }}");
+        if (m.Parameters.Length > 0)
+        {
+            var callbackType = $"Action<{string.Join(", ", m.Parameters.Select(p => TypeDisplay(p.Type)))}>";
+            var callbackArgs = string.Join(", ", m.Parameters.Select((p, idx) => $"({TypeDisplay(p.Type)})__args[{idx}]!"));
+            sb.AppendLine($"        public {structName} Callback({callbackType} callback) {{ _mock.{cbField}_Callbacks.Enqueue((_matcher, __args => callback({callbackArgs}))); return this; }}");
+        }
 
         sb.AppendLine("    }");
         sb.AppendLine($"    public {structName} Setup{apiName}() => new {structName}(this);");
+        if (m.Parameters.Length > 0)
+        {
+            var matcherSig = string.Join(", ", m.Parameters.Select(p => $"Func<{TypeDisplay(p.Type)}, bool> {p.Name}Matcher"));
+            var matcherBody = string.Join(" && ", m.Parameters.Select((p, idx) => $"{p.Name}Matcher(({TypeDisplay(p.Type)})__args[{idx}]!)"));
+            sb.AppendLine($"    public {structName} Setup{apiName}({matcherSig}) => new {structName}(this, __args => {matcherBody});");
+        }
         return sb.ToString();
     }
 
@@ -812,7 +825,8 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine($"    public readonly struct {structName}");
         sb.AppendLine("    {");
         sb.AppendLine($"        private readonly {className} _mock;");
-        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
+        sb.AppendLine("        private readonly Func<object?[], bool>? _matcher;");
+        sb.AppendLine($"        internal {structName}({className} mock, Func<object?[], bool>? matcher = null) {{ _mock = mock; _matcher = matcher; }}");
         sb.AppendLine($"        public {className} Returns({type} value) {{ _mock.{GetBehaviorFieldName(p)} = () => value; return _mock; }}");
         sb.AppendLine($"        public {className} Returns(Func<{type}> factory) {{ _mock.{GetBehaviorFieldName(p)} = factory; return _mock; }}");
         sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{GetBehaviorFieldName(p)} = () => throw ex; return _mock; }}");
@@ -830,7 +844,8 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine($"    public readonly struct {structName}");
         sb.AppendLine("    {");
         sb.AppendLine($"        private readonly {className} _mock;");
-        sb.AppendLine($"        internal {structName}({className} mock) => _mock = mock;");
+        sb.AppendLine("        private readonly Func<object?[], bool>? _matcher;");
+        sb.AppendLine($"        internal {structName}({className} mock, Func<object?[], bool>? matcher = null) {{ _mock = mock; _matcher = matcher; }}");
         sb.AppendLine($"        public {className} Throws(Exception ex) {{ _mock.{SetBehaviorFieldName(p)} = _ => throw ex; return _mock; }}");
         sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{SetBehaviorFieldName(p)} = _ => callback(); return this; }}");
         sb.AppendLine($"        public {structName} Callback(Action<{type}> callback) {{ _mock.{SetBehaviorFieldName(p)} = callback; return this; }}");
