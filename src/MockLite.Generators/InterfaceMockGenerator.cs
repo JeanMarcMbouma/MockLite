@@ -677,21 +677,11 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
 
         sb.AppendLine("    }");
         sb.AppendLine($"    public {structName} Setup{apiName}() => new {structName}(this);");
-        if (m.Parameters.Length > 1)
+        if (m.Parameters.Length > 0)
         {
-            var matcherSig = string.Join(", ", m.Parameters.Select(p => $"Func<{TypeDisplay(p.Type)}, bool> {p.Name}Matcher"));
+            var matcherSig = string.Join(", ", m.Parameters.Select(p => $"Predicate<{TypeDisplay(p.Type)}> {p.Name}Matcher"));
             var matcherBody = string.Join(" && ", m.Parameters.Select((p, idx) => $"{p.Name}Matcher(({TypeDisplay(p.Type)})__args[{idx}]!)"));
             sb.AppendLine($"    public {structName} Setup{apiName}({matcherSig}) => new {structName}(this, __args => {matcherBody});");
-        }
-        else if (m.Parameters.Length == 1)
-        {
-            // A one-parameter matcher phrase would collide with SetupMethod(behavior)
-            // when the mocked method returns bool: both signatures become Func<T, bool>.
-            // Use a distinct name while preserving full IntelliSense typing.
-            var p = m.Parameters[0];
-            var matcherSig = $"Func<{TypeDisplay(p.Type)}, bool> {p.Name}Matcher";
-            var matcherBody = $"{p.Name}Matcher(({TypeDisplay(p.Type)})__args[0]!)";
-            sb.AppendLine($"    public {structName} Setup{apiName}Matching({matcherSig}) => new {structName}(this, __args => {matcherBody});");
         }
         return sb.ToString();
     }
