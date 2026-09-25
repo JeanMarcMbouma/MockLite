@@ -209,8 +209,8 @@ public class InterfaceMockGenerator : ISourceGenerator
             var field = BehaviorFieldName(m);
             var delType = BehaviorDelegateType(m);
             sb.AppendLine($"    public {delType}? {field} {{ get; set; }}");
-            sb.AppendLine($"    private readonly List<(Func<object?[], bool>? Matcher, {delType} Behavior)> {field}_Setups = new();");
-            sb.AppendLine($"    private readonly List<(Func<object?[], bool>? Matcher, Action Callback)> {MethodCallbackFieldName(m)}_Callbacks = new();");
+            sb.AppendLine($"    private readonly System.Collections.Concurrent.ConcurrentQueue<(Func<object?[], bool>? Matcher, {delType} Behavior)> {field}_Setups = new();");
+            sb.AppendLine($"    private readonly System.Collections.Concurrent.ConcurrentQueue<(Func<object?[], bool>? Matcher, Action Callback)> {MethodCallbackFieldName(m)}_Callbacks = new();");
         }
 
         // Static cached MethodInfo fields for methods (avoids per-call GetMethod reflection).
@@ -504,7 +504,8 @@ public class InterfaceMockGenerator : ISourceGenerator
             var cbField = MethodCallbackFieldName(m);
             sb.AppendLine($"        var __args = new object?[] {{ {invocationArgs} }};");
             sb.AppendLine($"        foreach (var (__matcher, __callback) in {cbField}_Callbacks) if (__matcher is null || __matcher(__args)) __callback();");
-            sb.AppendLine($"        for (var __i = {field}_Setups.Count - 1; __i >= 0; __i--) {{ var (__matcher, __behavior) = {field}_Setups[__i]; if (__matcher is null || __matcher(__args)) {{");
+            sb.AppendLine($"        var __setups = {field}_Setups.ToArray();");
+            sb.AppendLine($"        for (var __i = __setups.Length - 1; __i >= 0; __i--) {{ var (__matcher, __behavior) = __setups[__i]; if (__matcher is null || __matcher(__args)) {{");
             if (ret == "void")
             {
                 sb.AppendLine($"            __behavior({behaviorArgs}); return; }} }}");
@@ -555,7 +556,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         var field = BehaviorFieldName(m);
         var behaviorType = BehaviorDelegateType(m);
         var apiName = MethodApiName(m);
-        return $"    public {className} Setup{apiName}({behaviorType} behavior) {{ {field}_Setups.Add((null, behavior)); return this; }}\n";
+        return $"    public {className} Setup{apiName}({behaviorType} behavior) {{ {field}_Setups.Enqueue((null, behavior)); return this; }}\n";
     }
 
     private static string EmitMethodSetupWithMatcher(IMethodSymbol m, string className)
@@ -567,7 +568,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         var sb = new StringBuilder();
         sb.AppendLine($"    public {className} Setup{apiName}({matcherSig}, {BehaviorDelegateType(m)} behavior)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        {field}_Setups.Add((__args => {matcherBody}, behavior));");
+        sb.AppendLine($"        {field}_Setups.Enqueue((__args => {matcherBody}, behavior));");
         sb.AppendLine("        return this;");
         sb.AppendLine("    }");
         return sb.ToString();
@@ -665,7 +666,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         }
 
         // Callback (chainable, returns phrase)
-        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField}_Callbacks.Add((null, callback)); return this; }}");
+        sb.AppendLine($"        public {structName} Callback(Action callback) {{ _mock.{cbField}_Callbacks.Enqueue((null, callback)); return this; }}");
 
         sb.AppendLine("    }");
         sb.AppendLine($"    public {structName} Setup{apiName}() => new {structName}(this);");
