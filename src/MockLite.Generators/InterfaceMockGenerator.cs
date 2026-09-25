@@ -96,7 +96,7 @@ public class InterfaceMockGenerator : ISourceGenerator
     {
         if (!HasOverloads(method)) return method.Name;
         var hash = Convert.ToBase64String(Encoding.UTF8.GetBytes(SignatureHash(method)))
-            .TrimEnd('=').Replace('+', '_').Replace('/', '-');
+            .TrimEnd('=').Replace('+', '_').Replace('/', '_');
         return $"{method.Name}_{hash}";
     }
 
@@ -312,7 +312,7 @@ public class InterfaceMockGenerator : ISourceGenerator
         var hash = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(SignatureHash(m)))
             .TrimEnd('=')
             .Replace('+', '_')
-            .Replace('/', '-');
+            .Replace('/', '_');
         return $"{m.Name}_{hash}_Behavior";
     }
 
