@@ -283,7 +283,8 @@ public class InterfaceMockGenerator : ISourceGenerator
                 ? $"global::{className}"
                 : $"global::{ns}.{className}";
 
-            sb.AppendLine($"internal static class {className}_Registrar");
+            var registrarName = SanitizeIdentifier(fullyQualifiedIface) + "_Registrar";
+            sb.AppendLine($"internal static class {registrarName}");
             sb.AppendLine("{");
             sb.AppendLine("    [System.Runtime.CompilerServices.ModuleInitializer]");
             sb.AppendLine($"    internal static void Register()");
