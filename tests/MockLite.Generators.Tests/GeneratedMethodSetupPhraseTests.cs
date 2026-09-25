@@ -415,4 +415,18 @@ public class GeneratedMethodSetupPhraseTests
         Assert.Equal(string.Empty, mock.Read("other"));
     }
 
+
+    [Fact]
+    public void BoolReturningSingleParameterMethod_BehaviorAndMatcherPhrasesRemainUnambiguous()
+    {
+        var mock = new MockBoolSetupService();
+
+        mock.SetupIsEnabled(feature => feature == "fallback");
+        mock.SetupIsEnabled((Predicate<string>)(feature => feature.StartsWith("beta")))
+            .Returns(feature => true);
+
+        Assert.True(mock.IsEnabled("beta-search"));
+        Assert.False(mock.IsEnabled("stable"));
+    }
+
 }
