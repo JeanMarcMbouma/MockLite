@@ -51,7 +51,7 @@ public class MockCreationBenchmarks
 [SimpleJob]
 public class MockInvocationBenchmarks
 {
-    private MockCalculator _generatedMock = null!;
+    private HandWrittenCalculator _handWritten = null!;\n    private MockCalculator _generatedMock = null!;
     private Mock<ICalculator> _runtimeBuilder = null!;
     private ICalculator _runtimeMock = null!;
 
@@ -60,12 +60,12 @@ public class MockInvocationBenchmarks
     {
         // Use new MockCalculator() directly so the generated type is always used,
         // regardless of the spawned process context BenchmarkDotNet creates.
-        _generatedMock = new MockCalculator();
+        _handWritten = new HandWrittenCalculator();\n        _generatedMock = new MockCalculator();
         _runtimeBuilder = Mock.Create<ICalculator>();
         _runtimeMock = _runtimeBuilder.Object;
     }
 
-    /// <summary>Calls Add on a source-generated mock.</summary>
+    [IterationSetup]\n    public void ResetInvocationHistory()\n    {\n        _generatedMock.Invocations.Clear();\n        _runtimeBuilder.Reset();\n    }\n\n    /// <summary>Calls Add on a hand-written implementation baseline.</summary>\n    [Benchmark(Description = "Invoke Add – hand-written")]\n    public int Invoke_HandWritten() => _handWritten.Add(3, 4);\n\n    /// <summary>Calls Add on a source-generated mock.</summary>
     [Benchmark(Description = "Invoke Add – source-generated")]
     public int Invoke_SourceGenerated() => _generatedMock.Add(3, 4);
 
