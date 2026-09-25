@@ -681,7 +681,14 @@ public sealed class InterfaceMockGenerator : ISourceGenerator
         {
             var matcherSig = string.Join(", ", m.Parameters.Select(p => $"Predicate<{TypeDisplay(p.Type)}> {p.Name}Matcher"));
             var matcherBody = string.Join(" && ", m.Parameters.Select((p, idx) => $"{p.Name}Matcher(({TypeDisplay(p.Type)})__args[{idx}]!)"));
-            sb.AppendLine($"    public {structName} Setup{apiName}({matcherSig}) => new {structName}(this, __args => {matcherBody});");
+            // A one-parameter bool-returning method has a behavior Func<T, bool>.
+            // An untyped lambda is convertible to both Func<T,bool> and Predicate<T>,
+            // so C# overload resolution is ambiguous. Give only that edge case a
+            // collision-safe matcher name; all other methods keep SetupMethod(...).
+            if (m.Parameters.Length == 1 && m.ReturnType.SpecialType == SpecialType.System_Boolean)
+                sb.AppendLine($"    public {structName} Setup{apiName}Matching({matcherSig}) => new {structName}(this, __args => {matcherBody});");
+            else
+                sb.AppendLine($"    public {structName} Setup{apiName}({matcherSig}) => new {structName}(this, __args => {matcherBody});");
         }
         return sb.ToString();
     }
