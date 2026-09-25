@@ -204,12 +204,12 @@ public sealed class Mock<T> where T : class
                 if (innerType.IsAssignableFrom(typeof(TInner)))
                 {
                     ValidateAndSetupOnCall(_method, [typeof(T1)], nameof(valueFactory));
-                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1)], typeof(TInner));
-
-                    // Wrap the result in Task.FromResult
+                    // Invoke the user's partial factory directly. Building a full-signature
+                    // delegate and DynamicInvoke-ing it with partial arguments causes a
+                    // TargetParameterCountException when the mocked method has trailing parameters.
                     var wrappedBehavior = new Func<T1, TResult>(arg1 =>
                     {
-                        var innerResult = behavior.DynamicInvoke(arg1);
+                        var innerResult = valueFactory(arg1);
                         var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
                             .MakeGenericMethod(innerType)
                             .Invoke(null, [innerResult]);
@@ -243,11 +243,9 @@ public sealed class Mock<T> where T : class
                 if (innerType.IsAssignableFrom(typeof(TInner)))
                 {
                     ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2)], nameof(valueFactory));
-                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2)], typeof(TInner));
-                    // Wrap the result in Task.FromResult
                     var wrappedBehavior = new Func<T1, T2, TResult>((arg1, arg2) =>
                     {
-                        var innerResult = behavior.DynamicInvoke(arg1, arg2);
+                        var innerResult = valueFactory(arg1, arg2);
                         var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
                             .MakeGenericMethod(innerType)
                             .Invoke(null, [innerResult]);
@@ -281,11 +279,9 @@ public sealed class Mock<T> where T : class
                 if (innerType.IsAssignableFrom(typeof(TInner)))
                 {
                     ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2), typeof(T3)], nameof(valueFactory));
-                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2), typeof(T3)], typeof(TInner));
-                    // Wrap the result in Task.FromResult
                     var wrappedBehavior = new Func<T1, T2, T3, TResult>((arg1, arg2, arg3) =>
                     {
-                        var innerResult = behavior.DynamicInvoke(arg1, arg2, arg3);
+                        var innerResult = valueFactory(arg1, arg2, arg3);
                         var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
                             .MakeGenericMethod(innerType)
                             .Invoke(null, [innerResult]);
