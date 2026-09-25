@@ -25,7 +25,23 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// <summary>
     /// Gets the list of all method invocations recorded on this mock.
     /// </summary>
-    public List<Invocation> Invocations { get; } = [];
+    private readonly List<Invocation> _invocations = [];
+    private readonly object _invocationLock = new();
+
+    // Kept for internal compatibility and diagnostics; Mock<T>.Invocations exposes a stable snapshot.
+    public List<Invocation> Invocations => _invocations;
+
+    internal IReadOnlyList<Invocation> GetInvocationsSnapshot()
+    {
+        lock (_invocationLock)
+            return _invocations.ToArray();
+    }
+
+    internal void ClearInvocations()
+    {
+        lock (_invocationLock)
+            _invocations.Clear();
+    }
 
     // Comparer that uses RuntimeMethodHandle for reliable equality across MethodInfo instances
     // that may originate from different reflection paths (expression trees vs DispatchProxy).
@@ -53,7 +69,8 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
         args ??= [];
-        Invocations.Add(new Invocation(targetMethod!, args!));
+        lock (_invocationLock)
+            _invocations.Add(new Invocation(targetMethod!, args!));
 
         // Execute callbacks for this method.
         ExecuteCallbacks(targetMethod!, args);

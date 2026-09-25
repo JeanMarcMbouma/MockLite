@@ -62,10 +62,15 @@ public class MockLiteAnalyzer : DiagnosticAnalyzer
             }
         }
 
+        // Diagnostics about the member selected inside a setup/verify expression must
+        // only run when that member invocation is actually nested in a MockLite runtime
+        // expression. Otherwise ordinary application calls can receive MockLite warnings.
+        var insideMockLiteExpression = IsInsideMockLiteExpression(context, invocation);
+
         // ML003: NonVirtualClassMethod — only flag when the call target is a
-        // non-virtual method on a concrete class that also implements interfaces
-        // (i.e. the user likely intended to mock through the interface instead).
-        if (containingType.TypeKind == TypeKind.Class &&
+        // non-virtual method on a concrete class that also implements interfaces.
+        if (insideMockLiteExpression &&
+            containingType.TypeKind == TypeKind.Class &&
             !symbol.IsVirtual && !symbol.IsAbstract &&
             symbol.DeclaredAccessibility == Accessibility.Public &&
             containingType.AllInterfaces.Length > 0)
@@ -84,7 +89,7 @@ public class MockLiteAnalyzer : DiagnosticAnalyzer
 
         // ML005: AmbiguousOverload — only flag on interface method calls where
         // the interface defines multiple overloads with the same name.
-        if (containingType.TypeKind == TypeKind.Interface)
+        if (insideMockLiteExpression && containingType.TypeKind == TypeKind.Interface)
         {
             var overloads = containingType.GetMembers(symbol.Name)
                 .OfType<IMethodSymbol>().Count();
@@ -100,6 +105,23 @@ public class MockLiteAnalyzer : DiagnosticAnalyzer
         // Setup→Verify pairs across the method body.  Without proper flow analysis
         // these would produce false positives on every call, so they are left as
         // no-ops until a proper implementation is added.
+    }
+
+
+    private static bool IsInsideMockLiteExpression(
+        SyntaxNodeAnalysisContext context,
+        InvocationExpressionSyntax invocation)
+    {
+        var lambda = invocation.Ancestors().OfType<LambdaExpressionSyntax>().FirstOrDefault();
+        if (lambda is null) return false;
+
+        var outerInvocation = lambda.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+        if (outerInvocation is null) return false;
+
+        var outerSymbol = context.SemanticModel.GetSymbolInfo(outerInvocation).Symbol as IMethodSymbol;
+        if (outerSymbol is null || !IsMockRuntimeType(outerSymbol.ContainingType)) return false;
+
+        return outerSymbol.Name is "Setup" or "Verify" or "Throws" or "OnCall" or "SetupSequence";
     }
 
     /// <summary>

@@ -5,7 +5,7 @@ A lightweight, high-performance mocking framework for .NET that combines compile
 ## Features
 
 - ✨ **Compile-Time Code Generation** - Automatically generates optimized mock classes using source generators
-- 🚀 **High Performance** - Generated mocks are as fast as hand-written implementations
+- 🚀 **Low-overhead generated path** - Source-generated mocks avoid DispatchProxy on invocation; see the benchmark project for measured comparisons
 - 🔄 **Runtime Fallback** - Seamless fallback to DispatchProxy-based runtime mocks for interfaces without generated mocks
 - ⚡ **Async Support** - First-class support for async methods (`Task`, `Task<T>`, `ValueTask`, `ValueTask<T>`)
 - 📝 **Invocation Recording** - Automatically records all method invocations with timestamps for verification

@@ -204,12 +204,12 @@ public sealed class Mock<T> where T : class
                 if (innerType.IsAssignableFrom(typeof(TInner)))
                 {
                     ValidateAndSetupOnCall(_method, [typeof(T1)], nameof(valueFactory));
-                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1)], typeof(TInner));
-
-                    // Wrap the result in Task.FromResult
+                    // Invoke the user's partial factory directly. Building a full-signature
+                    // delegate and DynamicInvoke-ing it with partial arguments causes a
+                    // TargetParameterCountException when the mocked method has trailing parameters.
                     var wrappedBehavior = new Func<T1, TResult>(arg1 =>
                     {
-                        var innerResult = behavior.DynamicInvoke(arg1);
+                        var innerResult = valueFactory(arg1);
                         var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
                             .MakeGenericMethod(innerType)
                             .Invoke(null, [innerResult]);
@@ -243,11 +243,9 @@ public sealed class Mock<T> where T : class
                 if (innerType.IsAssignableFrom(typeof(TInner)))
                 {
                     ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2)], nameof(valueFactory));
-                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2)], typeof(TInner));
-                    // Wrap the result in Task.FromResult
                     var wrappedBehavior = new Func<T1, T2, TResult>((arg1, arg2) =>
                     {
-                        var innerResult = behavior.DynamicInvoke(arg1, arg2);
+                        var innerResult = valueFactory(arg1, arg2);
                         var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
                             .MakeGenericMethod(innerType)
                             .Invoke(null, [innerResult]);
@@ -281,11 +279,9 @@ public sealed class Mock<T> where T : class
                 if (innerType.IsAssignableFrom(typeof(TInner)))
                 {
                     ValidateAndSetupOnCall(_method, [typeof(T1), typeof(T2), typeof(T3)], nameof(valueFactory));
-                    var behavior = CreatePartialHandlerDelegate(_method, valueFactory, [typeof(T1), typeof(T2), typeof(T3)], typeof(TInner));
-                    // Wrap the result in Task.FromResult
                     var wrappedBehavior = new Func<T1, T2, T3, TResult>((arg1, arg2, arg3) =>
                     {
-                        var innerResult = behavior.DynamicInvoke(arg1, arg2, arg3);
+                        var innerResult = valueFactory(arg1, arg2, arg3);
                         var task = typeof(Task).GetMethod(nameof(Task.FromResult))!
                             .MakeGenericMethod(innerType)
                             .Invoke(null, [innerResult]);
@@ -678,7 +674,7 @@ public sealed class Mock<T> where T : class
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (GenericMethodMatches(invocations[i].Method, method))
@@ -716,7 +712,7 @@ public sealed class Mock<T> where T : class
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             var inv = invocations[i];
@@ -824,7 +820,7 @@ public sealed class Mock<T> where T : class
     {
         var pi = ExtractProperty(property);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (invocations[i].Method == pi.GetMethod)
@@ -858,7 +854,7 @@ public sealed class Mock<T> where T : class
     {
         var pi = ExtractProperty(property);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (invocations[i].Method == pi.SetMethod)
@@ -893,7 +889,7 @@ public sealed class Mock<T> where T : class
     {
         var pi = ExtractProperty(property);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             var inv = invocations[i];
@@ -927,7 +923,7 @@ public sealed class Mock<T> where T : class
     /// including their method information and arguments. Useful for manual verification,
     /// debugging, and understanding the call sequence on the mock.
     /// </remarks>
-    public IReadOnlyList<Invocation> Invocations => _proxy.Invocations;
+    public IReadOnlyList<Invocation> Invocations => _proxy.GetInvocationsSnapshot();
 
     // --- Helper Methods ---
 
@@ -962,13 +958,8 @@ public sealed class Mock<T> where T : class
     }
 
     /// <summary>
-    /// Evaluates a single argument expression, substituting <c>It.IsAny&lt;T&gt;()</c> calls
-    /// with <see cref="It.AnyMatcher.Instance"/> (a stable reference-type sentinel) rather
-    /// than evaluating the expression to its runtime value. This avoids the GC-sensitive
-    /// value comparison for value-type parameters: <c>Unsafe.As&lt;AnyMatcher, T&gt;</c>
-    /// returns bytes derived from the GC-managed pointer of <see cref="It.AnyMatcher.Instance"/>,
-    /// which changes on heap compaction, causing stale cached sentinels to produce false negatives
-    /// under concurrent test runs.
+    /// Evaluates a single argument expression, recognizing MockLite matcher calls
+    /// directly from the expression tree before ordinary argument evaluation.
     /// </summary>
     private static object? ExtractArgument(Expression arg)
     {
@@ -1797,7 +1788,7 @@ public sealed class Mock<T> where T : class
     /// </example>
     public Mock<T> Reset()
     {
-        _proxy.Invocations.Clear();
+        _proxy.ClearInvocations();
         return this;
     }
 
@@ -1824,7 +1815,7 @@ public sealed class Mock<T> where T : class
     {
         var (method, _) = ExtractMethod(expression);
         int count = 0;
-        var invocations = _proxy.Invocations;
+        var invocations = _proxy.GetInvocationsSnapshot();
         for (int i = 0; i < invocations.Count; i++)
         {
             if (GenericMethodMatches(invocations[i].Method, method))
