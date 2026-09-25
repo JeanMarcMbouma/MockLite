@@ -180,7 +180,8 @@ public class InterfaceMockGenerator : ISourceGenerator
         sb.AppendLine("[GeneratedMock]");
         var classTypeParams = iface.TypeParameters.Length == 0 ? "" : "<" + string.Join(", ", iface.TypeParameters.Select(tp => tp.Name)) + ">";
         var classTypeName = className + classTypeParams;
-        sb.AppendLine($"public sealed class {classTypeName} : {ifaceDisplay}");
+        var classConstraints = BuildTypeParameterConstraints(iface.TypeParameters);
+        sb.AppendLine($"public sealed class {classTypeName} : {ifaceDisplay}{classConstraints}");
         sb.AppendLine("{");
         sb.AppendLine("    public List<Invocation> Invocations { get; } = new();");
 
@@ -298,6 +299,26 @@ public class InterfaceMockGenerator : ISourceGenerator
         return sb.ToString();
     }
 
+
+
+    private static string BuildTypeParameterConstraints(IEnumerable<ITypeParameterSymbol> typeParameters)
+    {
+        var clauses = new List<string>();
+        foreach (var tp in typeParameters)
+        {
+            var parts = new List<string>();
+            if (tp.HasUnmanagedTypeConstraint) parts.Add("unmanaged");
+            else if (tp.HasValueTypeConstraint) parts.Add("struct");
+            else if (tp.HasReferenceTypeConstraint) parts.Add("class");
+            if (tp.HasNotNullConstraint) parts.Add("notnull");
+            foreach (var constraintType in tp.ConstraintTypes)
+                parts.Add(TypeDisplay(constraintType));
+            if (tp.HasConstructorConstraint) parts.Add("new()");
+            if (parts.Count > 0)
+                clauses.Add($" where {tp.Name} : {string.Join(", ", parts)}");
+        }
+        return string.Concat(clauses);
+    }
 
     private static IEnumerable<string> GetReferencedNamespaces(INamedTypeSymbol iface)
     {
