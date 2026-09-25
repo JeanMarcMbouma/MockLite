@@ -48,20 +48,20 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     private static readonly MethodHandleComparer _handleComparer = new();
 
     // Signature-only fallback behaviors keyed by MethodInfo (no arg matching).
-    private readonly Dictionary<MethodInfo, Func<object?[], object?>> _signatureBehaviors = new(_handleComparer);
+    private readonly ConcurrentDictionary<MethodInfo, Func<object?[], object?>> _signatureBehaviors = new(_handleComparer);
 
     // Arg-specific behaviors keyed by MethodInfo; each entry is an ordered list
     // of (matchArgs, isAny flags, compiled invoker).  Later setups win (inserted at front).
-    private readonly Dictionary<MethodInfo, List<(object?[] MatchArgs, bool[] IsAny, Func<object?[], object?> Invoker)>> _argBehaviors = new(_handleComparer);
+    private readonly ConcurrentDictionary<MethodInfo, List<(object?[] MatchArgs, bool[] IsAny, Func<object?[], object?> Invoker)>> _argBehaviors = new(_handleComparer);
 
     // Callbacks keyed by MethodInfo to avoid per-call string building.
-    private readonly Dictionary<MethodInfo, List<(Func<object?[], bool>? Matcher, Action<object?[]> Callback)>> _callbacks = new(_handleComparer);
+    private readonly ConcurrentDictionary<MethodInfo, List<(Func<object?[], bool>? Matcher, Action<object?[]> Callback)>> _callbacks = new(_handleComparer);
 
     // Cached default return values to avoid repeated Activator.CreateInstance calls.
     private static readonly ConcurrentDictionary<Type, object?> _defaultValues = new();
 
     // Per-instance custom default values set via SetReturnsDefault<T>().
-    private readonly Dictionary<Type, object?> _customDefaults = new();
+    private readonly ConcurrentDictionary<Type, object?> _customDefaults = new();
 
     /// <summary>
     /// Intercepts method calls on the proxied interface.
@@ -80,9 +80,11 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
             argList = FindGenericWildcard(_argBehaviors, targetMethod);
         if (argList != null)
         {
-            for (int i = 0; i < argList.Count; i++)
+            (object?[] MatchArgs, bool[] IsAny, Func<object?[], object?> Invoker)[] snapshot;
+            lock (argList) snapshot = argList.ToArray();
+            for (int i = 0; i < snapshot.Length; i++)
             {
-                var (matchArgs, isAny, invoker) = argList[i];
+                var (matchArgs, isAny, invoker) = snapshot[i];
                 if (MatchesArguments(matchArgs, isAny, args))
                     return invoker(args);
             }
@@ -124,11 +126,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
 
         var invoker = CompileInvoker(behavior);
 
-        if (!_argBehaviors.TryGetValue(method, out var list))
-            _argBehaviors[method] = list = [];
-
-        // Insert at the front so that the most recent setup takes priority.
-        list.Insert(0, (args, isAny, invoker));
+        var list = _argBehaviors.GetOrAdd(method, _ => []);
+        lock (list)
+            list.Insert(0, (args, isAny, invoker));
     }
 
     /// <summary>
@@ -142,9 +142,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// </summary>
     public void OnInvocation(MethodInfo method, Func<object?[], bool>? matcher, Action<object?[]> callback)
     {
-        if (!_callbacks.TryGetValue(method, out var list))
-            _callbacks[method] = list = [];
-        list.Add((matcher, callback));
+        var list = _callbacks.GetOrAdd(method, _ => []);
+        lock (list)
+            list.Add((matcher, callback));
     }
 
     /// <summary>
@@ -156,7 +156,9 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
             callbackList = FindGenericWildcard(_callbacks, method);
         if (callbackList != null)
         {
-            foreach (var (matcher, callback) in callbackList)
+            (Func<object?[], bool>? Matcher, Action<object?[]> Callback)[] snapshot;
+            lock (callbackList) snapshot = callbackList.ToArray();
+            foreach (var (matcher, callback) in snapshot)
             {
                 if (matcher == null || matcher(args))
                     callback(args);
@@ -304,7 +306,7 @@ internal class RuntimeProxy<T> : DispatchProxy where T : class
     /// <paramref name="target"/>. Only called when an exact <c>TryGetValue</c> has
     /// already failed and <paramref name="target"/> is a generic method.
     /// </summary>
-    private static TValue? FindGenericWildcard<TValue>(Dictionary<MethodInfo, TValue> dict, MethodInfo target)
+    private static TValue? FindGenericWildcard<TValue>(IEnumerable<KeyValuePair<MethodInfo, TValue>> dict, MethodInfo target)
         where TValue : class
     {
         foreach (var kvp in dict)
