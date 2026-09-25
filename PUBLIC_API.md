@@ -196,12 +196,11 @@ For each non-generic interface method named `Method`, a generated mock exposes t
 | `MethodReturns(value)` | Configure a constant sync, `Task<T>`, or `ValueTask<T>` result |
 | `MethodReturns()` | Configure completed non-generic `Task` or default `ValueTask` |
 | `SetupMethod()` | Return a generated method setup phrase |
-| `SetupMethod(parameterMatcher...)` | For methods with 2+ parameters, return the same typed phrase filtered by typed predicates |
-| `SetupMethodMatching(parameterMatcher)` | For single-parameter methods, return the filtered typed phrase without colliding with `Func<T, bool>` behaviors |
+| `SetupMethod(parameterMatcher...)` | Return the same typed phrase, filtered by one typed `Predicate<T>` per parameter |
 | `VerifyMethod(times, message?)` | Verify the method call count |
 | `VerifyMethod(parameterMatcher..., times, message?)` | Verify calls accepted by all typed parameter predicates |
 
-Generated method phrases preserve the selected method's complete signature. Their factory `Returns` overload takes the method's full typed parameter list, and methods with parameters expose both `Callback(Action)` and an exact typed `Callback(Action<T1, ...>)`. Matcher-selecting `SetupMethod(parameterMatcher...)` overloads (2+ parameters) and `SetupMethodMatching(parameterMatcher)` overloads (one parameter) return the same phrase, so the matcher is inherited by both callbacks and terminal behaviors. The distinct single-parameter name avoids a C# signature collision when the mocked method itself returns `bool`, where both behavior and matcher would otherwise be `Func<T, bool>`. Constant returns, factory returns, throws, direct `SetupMethod(behavior)`, and shorthand `MethodReturns(...)` all participate in the same ordered setup registration; the most recently registered matching setup wins. Generic interface methods are implemented and can be verified, but do not receive generated setup/returns helpers.
+Generated method phrases preserve the selected method's complete signature. Their factory `Returns` overload takes the method's full typed parameter list, and methods with parameters expose both `Callback(Action)` and an exact typed `Callback(Action<T1, ...>)`. Matcher-selecting `SetupMethod(parameterMatcher...)` overloads use `Predicate<T>` parameters and return the same phrase, so the matcher is inherited by both callbacks and terminal behaviors. Using `Predicate<T>` keeps the fluent `SetupMethod(...)` name even for a single-parameter method returning `bool`, without colliding with its `Func<T, bool>` behavior overload. Constant returns, factory returns, throws, direct `SetupMethod(behavior)`, and shorthand `MethodReturns(...)` all participate in the same ordered setup registration; the most recently registered matching setup wins. Generic interface methods are implemented and can be verified, but do not receive generated setup/returns helpers.
 
 For example:
 
