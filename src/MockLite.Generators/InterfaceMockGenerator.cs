@@ -10,66 +10,76 @@ namespace BbQ.MockLite.Generators;
 [Generator]
 public class InterfaceMockGenerator : ISourceGenerator
 {
-    public void Initialize(GeneratorInitializationContext context) { }
+    public void Initialize(GeneratorInitializationContext context)
+    {
+        context.RegisterForSyntaxNotifications(static () => new TargetSyntaxReceiver());
+    }
 
     public void Execute(GeneratorExecutionContext context)
     {
+        if (context.SyntaxReceiver is not TargetSyntaxReceiver receiver) return;
+
         var compilation = context.Compilation;
-        var targets = DiscoverTargets(compilation);
+        var targets = DiscoverTargets(compilation, receiver);
 
         foreach (var iface in targets)
         {
             var source = GenerateMockSource(compilation, iface);
-            var className = GetMockClassName(iface.Name);
             var hintName = SanitizeIdentifier(iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) + ".g.cs";
             context.AddSource(hintName, source);
         }
     }
 
-    private static IEnumerable<INamedTypeSymbol> DiscoverTargets(Compilation compilation)
+    private static IEnumerable<INamedTypeSymbol> DiscoverTargets(Compilation compilation, TargetSyntaxReceiver receiver)
     {
         var results = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
-        foreach (var tree in compilation.SyntaxTrees)
+        foreach (var declaration in receiver.Candidates)
         {
-            var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
-            var root = tree.GetRoot();
+            var model = compilation.GetSemanticModel(declaration.SyntaxTree, ignoreAccessibility: true);
 
-            foreach (var ifaceDecl in root.DescendantNodes().OfType<InterfaceDeclarationSyntax>())
+            if (declaration is InterfaceDeclarationSyntax ifaceDecl)
             {
-                var symbol = model.GetDeclaredSymbol(ifaceDecl) as INamedTypeSymbol;
-                if (symbol is null) continue;
-
-                if (symbol.GetAttributes().Any(a => a.AttributeClass?.Name == nameof(GenerateMockAttribute)))
+                if (model.GetDeclaredSymbol(ifaceDecl) is INamedTypeSymbol symbol &&
+                    symbol.GetAttributes().Any(a => a.AttributeClass?.Name == nameof(GenerateMockAttribute)))
                     results.Add(symbol);
+                continue;
             }
 
-            foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            if (declaration is not ClassDeclarationSyntax classDecl ||
+                model.GetDeclaredSymbol(classDecl) is not INamedTypeSymbol classSymbol)
+                continue;
+
+            foreach (var attr in classSymbol.GetAttributes())
             {
-                var classSymbol = model.GetDeclaredSymbol(classDecl) as INamedTypeSymbol;
-                if (classSymbol is null) continue;
+                var name = attr.AttributeClass?.Name;
+                if (name is null) continue;
 
-                foreach (var attr in classSymbol.GetAttributes())
+                if (name == nameof(GenerateMockAttribute) && attr.ConstructorArguments.Length == 1)
                 {
-                    var name = attr.AttributeClass?.Name;
-                    if (name is null) continue;
-
-                    if (name == nameof(GenerateMockAttribute) && attr.ConstructorArguments.Length == 1)
-                    {
-                        if (attr.ConstructorArguments[0].Value is INamedTypeSymbol t && t.TypeKind == TypeKind.Interface)
-                            results.Add(t);
-                    }
-                    else if (name.StartsWith(nameof(GenerateMockAttribute)) && attr.AttributeClass?.TypeArguments.Length == 1)
-                    {
-                        var t = attr.AttributeClass.TypeArguments[0] as INamedTypeSymbol;
-                        if (t is { TypeKind: TypeKind.Interface })
-                            results.Add(t);
-                    }
+                    if (attr.ConstructorArguments[0].Value is INamedTypeSymbol t && t.TypeKind == TypeKind.Interface)
+                        results.Add(t);
+                }
+                else if (name.StartsWith(nameof(GenerateMockAttribute)) && attr.AttributeClass?.TypeArguments.Length == 1)
+                {
+                    if (attr.AttributeClass.TypeArguments[0] is INamedTypeSymbol t && t.TypeKind == TypeKind.Interface)
+                        results.Add(t);
                 }
             }
         }
 
         return results;
+    }
+
+    private sealed class TargetSyntaxReceiver : ISyntaxReceiver
+    {
+        public List<TypeDeclarationSyntax> Candidates { get; } = new();
+
+        public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
+        {
+            if (syntaxNode is TypeDeclarationSyntax { AttributeLists.Count: > 0 } declaration)
+                Candidates.Add(declaration);
+        }
     }
 
     private static string GetMockClassName(string ifaceName)
