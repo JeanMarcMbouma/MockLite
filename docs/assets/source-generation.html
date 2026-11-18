@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MockLite — your contract becomes your testing API</title>
+<!-- Screenshot source. Capture at 1440×940 with deviceScaleFactor 1.
+     This is a code walkthrough, not a simulated IDE or test runner. -->
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0c1322;color:#edf3ff;font-family:system-ui,sans-serif;padding:56px 64px}main{max-width:1312px;margin:auto}.brand{font-size:22px;font-weight:750;letter-spacing:-.6px}.brand span{color:#7ce6c5}.eyebrow{color:#7ce6c5;font-size:12px;font-weight:700;letter-spacing:2px;margin:46px 0 15px}h1{font-size:49px;line-height:1.12;letter-spacing:-2px;margin:0;max-width:1000px}.intro{font-size:19px;color:#b3bfd5;line-height:1.6;margin:18px 0 32px}.panels{display:grid;grid-template-columns:.85fr 1.3fr;gap:20px}.panel{border:1px solid #30415d;border-radius:14px;overflow:hidden;background:#111d30}.label{padding:17px 23px;border-bottom:1px solid #30415d;font-size:13px;font-weight:650;color:#b3bfd5;display:flex;gap:12px;align-items:center}.num{color:#7ce6c5}.code{padding:23px 24px;margin:0;font:16px/1.85 ui-monospace,"DejaVu Sans Mono",monospace;white-space:pre-wrap;overflow-wrap:anywhere}.kw{color:#b8a8ff}.type{color:#7ce6c5}.str{color:#f9cf92}.comment{color:#93a5bf}.method{color:#96caff}.aside{margin:0 24px 24px;padding:18px;border-left:2px solid #7ce6c5;background:#16283a;font-size:15px;line-height:1.65;color:#c7d6e9}.benefits{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;margin-top:28px}.benefits h2{font-size:16px;font-weight:650;margin:0 0 8px}.benefits p{font-size:14px;line-height:1.6;color:#aabbd3;margin:0}footer{margin-top:28px;font-size:12px;color:#93a5bf}@media(max-width:900px){body{padding:28px}.panels,.benefits{grid-template-columns:1fr}h1{font-size:38px}.code{font-size:14px}}
+</style>
+<main>
+<div class="brand">MockLite<span> / </span>C# source generation</div>
+<p class="eyebrow">FROM APPLICATION CONTRACT TO TEST SCENARIO</p>
+<h1>Your next testing API<br>is already in your interfaces.</h1>
+<p class="intro">Generate the test double. Discover its members. Describe the behavior that matters.</p>
+<div class="panels">
+<section class="panel" aria-label="Select an interface">
+<div class="label"><span class="num">01</span> Select a contract in your test project</div>
+<pre class="code"><code>[<span class="type">GenerateMock</span>&lt;<span class="type">IPriceFeed</span>&gt;]
+<span class="kw">public partial class</span> <span class="type">TestDoubles</span> { }
+
+<span class="kw">public interface</span> <span class="type">IPriceFeed</span>
+{
+    <span class="kw">decimal</span> <span class="method">GetPrice</span>(<span class="kw">string</span> sku);
+}</code></pre>
+<p class="aside">Build → MockLite generates <strong>MockPriceFeed</strong> with setup and verification members for your contract.</p>
+</section>
+<section class="panel" aria-label="Use the generated API">
+<div class="label"><span class="num">02</span> Configure and verify with the generated API</div>
+<pre class="code"><code><span class="kw">var</span> prices = <span class="kw">new</span> <span class="type">MockPriceFeed</span>();
+
+prices.<span class="method">SetupGetPrice</span>(sku =&gt; sku == <span class="str">"SKU-42"</span>)
+    .<span class="method">Callback</span>(sku =&gt; Console.WriteLine(sku))
+    .<span class="method">Returns</span>(<span class="str">19.95m</span>);
+
+<span class="comment">// sku is inferred as string in both lambdas.</span>
+<span class="type">IPriceFeed</span> feed = prices;
+<span class="kw">decimal</span> price = feed.<span class="method">GetPrice</span>(<span class="str">"SKU-42"</span>);
+
+prices.<span class="method">VerifyGetPrice</span>(
+    sku =&gt; sku == <span class="str">"SKU-42"</span>, <span class="type">Times</span>.Once);</code></pre>
+</section>
+</div>
+<div class="benefits">
+<section><h2>Discover as you type</h2><p>Member-specific setup and verification methods appear in IntelliSense.</p></section>
+<section><h2>Keep behavior typed</h2><p>Callback parameters and return values follow the interface signature.</p></section>
+<section><h2>Inspect what runs</h2><p>Concrete C# implementations are generated during your build.</p></section>
+</div>
+<footer>Code walkthrough · requires BbQ.MockLite + BbQ.MockLite.Generators · using BbQ.MockLite; omitted for space</footer>
+</main>
+</html>
