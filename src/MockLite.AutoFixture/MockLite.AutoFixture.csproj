@@ -5,7 +5,7 @@
     <Authors>Jean Marc Mbouma</Authors>
     <PackageId>BbQ.MockLite.AutoFixture</PackageId>
     <Description>Freeze MockLite test doubles for injection by AutoFixture.</Description>
-    <PackageVersion>2.0.0</PackageVersion>
+    <PackageVersion>2.0.1</PackageVersion>
     <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
