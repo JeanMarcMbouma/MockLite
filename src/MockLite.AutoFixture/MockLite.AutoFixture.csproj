@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>BbQ.MockLite.AutoFixture</RootNamespace>
+    <Authors>Jean Marc Mbouma</Authors>
+    <PackageId>BbQ.MockLite.AutoFixture</PackageId>
+    <Description>Freeze MockLite test doubles for injection by AutoFixture.</Description>
+    <PackageVersion>2.0.1</PackageVersion>
+    <RepositoryUrl>https://github.com/JeanMarcMbouma/MockLite</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AutoFixture" Version="4.18.1" />
+    <ProjectReference Include="../MockLite.Core/MockLite.Core.csproj" />
+    <None Remove="README.md" />
+    <None Include="README.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+</Project>

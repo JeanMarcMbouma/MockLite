@@ -5,4 +5,5 @@
   <Project Path="tests/MockLite.Core.Tests/MockLite.Core.Tests.csproj" />
   <Project Path="tests/MockLite.Generators.Tests/MockLite.Generators.Tests.csproj" />
   <Project Path="benchmarks/MockLite.Benchmarks/MockLite.Benchmarks.csproj" />
+  <Project Path="src/MockLite.AutoFixture/MockLite.AutoFixture.csproj" />
 </Solution>

@@ -24,6 +24,7 @@ jobs:
         run: |
           dotnet pack src/MockLite.Core/MockLite.Core.csproj --configuration Release --no-build -o ./artifacts /p:PackageVersion=0.0.0-ci
           dotnet pack src/MockLite.Generators/MockLite.Generators.csproj --configuration Release --no-build -o ./artifacts /p:PackageVersion=0.0.0-ci
+          dotnet pack src/MockLite.AutoFixture/MockLite.AutoFixture.csproj --configuration Release --no-build -o ./artifacts /p:PackageVersion=0.0.0-ci
       - name: Smoke test packed packages
         run: |
           mkdir -p /tmp/mocklite-consumer

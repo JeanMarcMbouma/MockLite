@@ -10,5 +10,6 @@ MockLite generates a testing API from your C# interfaces: concrete test doubles 
 6. [[Migrating to 2.x|Migrating-to-2.x]] — changed interaction semantics.
 7. [[Benchmarks]] — methodology, commands and historical measurements.
 8. [[Feature Summary|Feature-Summary]] — implementation overview.
+9. [[AutoFixture]] — inject a configured generated or runtime mock into services.
 
 [Source and samples](https://github.com/JeanMarcMbouma/MockLite)
