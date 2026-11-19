@@ -8,7 +8,7 @@ With the .NET SDK and Native AOT prerequisites installed, publish and run from
 the repository root. This example targets Linux x64.
 
 ```sh
-dotnet publish tests/MockLite.NativeAot.Tests -c Release -r linux-x64 -p:PublishAot=true -warnaserror -o /tmp/mocklite-native-aot
+dotnet publish tests/MockLite.NativeAot.Tests -c Release -r linux-x64 -p:NativeAotTest=true -warnaserror -o /tmp/mocklite-native-aot
 /tmp/mocklite-native-aot/MockLite.NativeAot.Tests
 ```
 
