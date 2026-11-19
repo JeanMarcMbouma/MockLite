@@ -49,3 +49,7 @@ jobs:
           }
           EOF
           dotnet run
+      - name: Publish and run Native AOT tests
+        run: |
+          dotnet publish tests/MockLite.NativeAot.Tests -c Release -r linux-x64 -p:NativeAotTest=true -warnaserror -o /tmp/mocklite-native-aot
+          /tmp/mocklite-native-aot/MockLite.NativeAot.Tests
