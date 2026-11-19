@@ -3,6 +3,7 @@
 - [[Home]]
 - [[Getting Started]]
 - [[Source Generators]]
+- [[Native AOT|Native-AOT]]
 - [[AutoFixture]]
 
 **Reference**
