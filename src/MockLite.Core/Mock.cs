@@ -1935,6 +1935,18 @@ public static class Mock
     }
 
 
+    /// <summary>Creates a mock using the source-generated factory registered for <typeparamref name="T"/>.</summary>
+    /// <exception cref="InvalidOperationException">No generated factory was registered for the contract.</exception>
+    /// <remarks>This method uses only the generated registry and is suitable for Native AOT.</remarks>
+    public static T CreateGenerated<T>() where T : class
+    {
+        if (MockTypeRegistry.TryCreate(typeof(T), out var registered))
+            return (T)registered!;
+
+        throw new InvalidOperationException(
+            $"No generated mock is registered for '{typeof(T)}'. Add a GenerateMock declaration and reference the MockLite generator.");
+    }
+
     public static Mock<T> Create<T>() where T : class
         => new();
 }
