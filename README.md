@@ -24,6 +24,27 @@ Less time maintaining handwritten fakes. More time describing how your applicati
 
 The package pairs source generation with Roslyn diagnostics and code fixes for recognized setup mistakes. See [which diagnostics are implemented](https://github.com/JeanMarcMbouma/MockLite/wiki/Analyzers).
 
+## Native AOT
+
+Use the same generated mock classes in Native AOT builds. Construct
+`new MockPriceFeed()` for typed setup and verification, then pass it to your
+code as `IPriceFeed`.
+
+```mermaid
+flowchart LR
+    A["C# interface"] --> B["MockLite source generator"]
+    B --> C["Typed mock class"]
+    C --> D["Native executable"]
+    classDef input fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef generated fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    classDef native fill:#ccfbf1,stroke:#0f766e,color:#134e4a
+    class A input
+    class B,C generated
+    class D native
+```
+
+[Publish and run a Native AOT example with MockLite 2.0.2](./docs/wiki/Native-AOT.md).
+
 ## Try it in a test project
 
 Add both packages to the project that will compile your generated mocks:

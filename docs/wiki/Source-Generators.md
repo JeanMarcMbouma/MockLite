@@ -40,6 +40,6 @@ For a property named `Name`, applicable generated members are:
 Every generated mock exposes `IReadOnlyList<Invocation> Invocations` as a snapshot and `Reset()` to clear recorded invocations.
 
 
-Generated code uses reflection metadata to record invocations; Native AOT support has not been established here.
+Generated mocks can use reflection metadata to record invocations. For Native AOT, construct the generated class directly to avoid runtime proxy generation. See [[Native AOT|Native-AOT]] for a complete publish-and-run example.
 
 [[Full API reference|API-Reference]]

@@ -11,5 +11,6 @@ MockLite generates a testing API from your C# interfaces: concrete test doubles 
 7. [[Benchmarks]] — methodology, commands and historical measurements.
 8. [[Feature Summary|Feature-Summary]] — implementation overview.
 9. [[AutoFixture]] — inject a configured generated or runtime mock into services.
+10. [[Native AOT|Native-AOT]] — publish and run generated mocks as a native executable.
 
 [Source and samples](https://github.com/JeanMarcMbouma/MockLite)
