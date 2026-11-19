@@ -91,6 +91,14 @@ Generated mocks support methods, properties, typed matching, callbacks, async re
 
 For measured comparisons and reproducible commands, see the [wiki benchmarks](https://github.com/JeanMarcMbouma/MockLite/wiki/Benchmarks) and [benchmark project](./benchmarks/MockLite.Benchmarks).
 
+## Native AOT
+
+Construct generated classes directly for typed setup and verification. Use
+`Mock.CreateGenerated<IPriceFeed>()` when you need a factory that returns the
+interface. It uses the generated registry and throws if the contract has no
+registration. `Mock.Create<T>()` uses runtime proxies, and `Mock.Of<T>()`
+can fall back to runtime proxies when a generated mock is unavailable.
+
 ## Go further in the wiki
 
 - [Generated and runtime API reference](https://github.com/JeanMarcMbouma/MockLite/wiki/API-Reference) — signatures, matching and verification.
