@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/MockLite.AutoFixture/MockLite.AutoFixture.csproj" />
     <ProjectReference Include="..\..\src\MockLite.Core\MockLite.Core.csproj" />
     <ProjectReference Include="..\..\src\MockLite.Generators\MockLite.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
